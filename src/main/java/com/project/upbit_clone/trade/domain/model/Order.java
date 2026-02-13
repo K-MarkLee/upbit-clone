@@ -46,7 +46,7 @@ public class Order extends BaseEntity {
     // TODO : 디폴트 값 'GTC' FOK는 구현 안할 예정.
     @Enumerated(EnumType.STRING)
     @Column(name = "time_in_force", nullable = false)
-    private TimeInForce timeInForce;
+    private TimeInForce timeInForce = TimeInForce.GTC;
 
     @Column(name = "price", precision = 30, scale = 8)
     private BigDecimal price;
@@ -66,7 +66,7 @@ public class Order extends BaseEntity {
     // TODO : 디폴트 값 'OPEN'
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private OrderStatus status;
+    private OrderStatus status = OrderStatus.OPEN;
 
     @Column(name = "cancel_reason", length = 50)
     private String cancelReason;

@@ -28,7 +28,7 @@ public class User extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private EnumStatus status;
+    private EnumStatus status = EnumStatus.ACTIVE;
 
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;

@@ -44,14 +44,14 @@ public class Trade {
     private BigDecimal quoteAmount;
 
     @Column(name = "fee_rate", precision = 10, scale = 8, nullable = false)
-    private BigDecimal feeRate;
+    private BigDecimal feeRate = BigDecimal.ZERO;
 
     @Column(name = "buy_fee_amount", precision = 30, scale = 8, nullable = false)
-    private BigDecimal buyFeeAmount;
+    private BigDecimal buyFeeAmount = BigDecimal.ZERO;
 
     @Column(name = "sell_fee_amount", precision = 30, scale = 8, nullable = false)
-    private BigDecimal sellFeeAmount;
+    private BigDecimal sellFeeAmount = BigDecimal.ZERO;
 
-    @Column(name = "executed_at", insertable = false, updatable = false)
+    @Column(name = "executed_at", insertable = false, updatable = false, nullable = false)
     private LocalDateTime executedAt;
 }

@@ -35,7 +35,7 @@ public class Market extends BaseEntity {
     // TODO : 디폴트 값 'ACTIVE' 필요
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private EnumStatus status;
+    private EnumStatus status = EnumStatus.ACTIVE;
 
     @Column(name = "min_order_quote", precision = 30, scale = 8, nullable = false)
     private BigDecimal minOrderQuote;

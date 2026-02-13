@@ -69,7 +69,7 @@ public class Ledger {
     private String idempotencyKey;
 
     // TODO: timestamp(3) ddl적용 예정
-    @Column(name="created_at", insertable=false, updatable=false)
+    @Column(name="created_at", insertable=false, updatable=false, nullable=false)
     private LocalDateTime createdAt;
 
 

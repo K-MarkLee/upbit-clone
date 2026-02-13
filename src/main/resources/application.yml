@@ -1,0 +1,9 @@
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/mydatabase
+    username: myuser
+    password: secret
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate

@@ -29,10 +29,10 @@ public class Wallet extends BaseEntity {
     private Asset asset;
 
     @Column(name = "available_balance", precision = 30, scale = 8, nullable = false)
-    private BigDecimal availableBalance;
+    private BigDecimal availableBalance = BigDecimal.ZERO;
 
     @Column(name = "locked_balance", precision = 30, scale = 8, nullable = false)
-    private BigDecimal lockedBalance;
+    private BigDecimal lockedBalance = BigDecimal.ZERO;
 
     @Version
     @Column(name = "version", nullable = false)

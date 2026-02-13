@@ -25,9 +25,9 @@ public class Asset extends BaseEntity {
     private String name;
 
     @Column(name = "decimals", nullable = false)
-    private Short decimals;
+    private Byte decimals;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private EnumStatus status;
+    private EnumStatus status = EnumStatus.ACTIVE;
 }
