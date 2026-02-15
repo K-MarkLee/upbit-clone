@@ -1,10 +1,10 @@
 package com.project.upbit_clone.user.domain.model;
 
 import com.project.upbit_clone.global.domain.model.BaseEntity;
-
 import com.project.upbit_clone.global.domain.vo.EnumStatus;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -30,7 +30,17 @@ public class User extends BaseEntity {
     @Column(name = "status", nullable = false)
     private EnumStatus status = EnumStatus.ACTIVE;
 
-    @Column(name = "password_hash", nullable = false, length = 255)
+    @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 
+    public static User create(String email, String userName, EnumStatus status, String passwordHash) {
+        return new User(email, userName, status, passwordHash);
+    }
+
+    private User(String email, String userName, EnumStatus status, String passwordHash) {
+        this.email = email;
+        this.userName = userName;
+        this.status = (status == null) ? EnumStatus.ACTIVE : status;
+        this.passwordHash = passwordHash;
+    }
 }

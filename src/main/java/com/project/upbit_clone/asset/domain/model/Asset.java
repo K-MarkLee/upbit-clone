@@ -1,9 +1,11 @@
 package com.project.upbit_clone.asset.domain.model;
 
 import com.project.upbit_clone.global.domain.model.BaseEntity;
+import com.project.upbit_clone.global.domain.vo.AssetDecimals;
 import com.project.upbit_clone.global.domain.vo.EnumStatus;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -30,4 +32,15 @@ public class Asset extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private EnumStatus status = EnumStatus.ACTIVE;
+
+    public static Asset create(String symbol, String name, Byte decimals, EnumStatus status) {
+        return new Asset(symbol, name, decimals, status);
+    }
+
+    private Asset(String symbol, String name, Byte decimals, EnumStatus status) {
+        this.symbol = symbol;
+        this.name = name;
+        this.decimals = new AssetDecimals(decimals).value();
+        this.status = (status == null) ? EnumStatus.ACTIVE : status;
+    }
 }

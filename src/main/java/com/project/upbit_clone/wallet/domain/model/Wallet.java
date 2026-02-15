@@ -2,6 +2,8 @@ package com.project.upbit_clone.wallet.domain.model;
 
 import com.project.upbit_clone.asset.domain.model.Asset;
 import com.project.upbit_clone.global.domain.model.BaseEntity;
+import com.project.upbit_clone.global.domain.vo.NonNegativeAmount;
+import com.project.upbit_clone.global.domain.vo.PositiveAmount;
 import com.project.upbit_clone.user.domain.model.User;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -37,4 +39,15 @@ public class Wallet extends BaseEntity {
     @Version
     @Column(name = "version", nullable = false)
     private Long version;
+
+    public static Wallet create(User user, Asset asset, BigDecimal availableBalance, BigDecimal lockedBalance) {
+        return new Wallet(user, asset, availableBalance, lockedBalance);
+    }
+
+    private Wallet(User user, Asset asset, BigDecimal availableBalance, BigDecimal lockedBalance) {
+        this.user = user;
+        this.asset = asset;
+        this.availableBalance = new NonNegativeAmount(availableBalance).value();
+        this.lockedBalance = new NonNegativeAmount(lockedBalance).value();
+    }
 }
