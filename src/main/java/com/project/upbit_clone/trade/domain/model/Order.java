@@ -1,6 +1,7 @@
 package com.project.upbit_clone.trade.domain.model;
 
 import com.project.upbit_clone.global.domain.model.BaseEntity;
+import com.project.upbit_clone.global.domain.vo.NonNegativeAmount;
 import com.project.upbit_clone.trade.domain.vo.OrderSide;
 import com.project.upbit_clone.trade.domain.vo.OrderStatus;
 import com.project.upbit_clone.trade.domain.vo.OrderType;
@@ -46,7 +47,7 @@ public class Order extends BaseEntity {
     // TODO : 디폴트 값 'GTC' FOK는 구현 안할 예정.
     @Enumerated(EnumType.STRING)
     @Column(name = "time_in_force", nullable = false)
-    private TimeInForce timeInForce;
+    private TimeInForce timeInForce = TimeInForce.GTC;
 
     @Column(name = "price", precision = 30, scale = 8)
     private BigDecimal price;
@@ -58,16 +59,49 @@ public class Order extends BaseEntity {
     private BigDecimal quoteAmount;
 
     @Column(name = "executed_quantity", precision = 30, scale = 8, nullable = false)
-    private BigDecimal executedQuantity = BigDecimal.ZERO;
+    private BigDecimal executedQuantity;
 
     @Column(name = "executed_quote_amount", precision = 30, scale = 8, nullable = false)
-    private BigDecimal executedQuoteAmount = BigDecimal.ZERO;
+    private BigDecimal executedQuoteAmount;
 
     // TODO : 디폴트 값 'OPEN'
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private OrderStatus status;
+    private OrderStatus status = OrderStatus.OPEN;
 
     @Column(name = "cancel_reason", length = 50)
     private String cancelReason;
+
+    public static Order create(CreateCommand command) {
+        return new Order(command);
+    }
+
+    private Order(CreateCommand command) {
+        this.market = command.market();
+        this.user = command.user();
+        this.clientOrderId = command.clientOrderId();
+        this.orderSide = command.orderSide();
+        this.orderType = command.orderType();
+        this.timeInForce = (command.timeInForce() == null) ? TimeInForce.GTC : command.timeInForce();
+        this.price = command.price();
+        this.quantity = command.quantity();
+        this.quoteAmount = command.quoteAmount();
+        this.executedQuantity = new NonNegativeAmount(BigDecimal.ZERO).value();
+        this.executedQuoteAmount = new NonNegativeAmount(BigDecimal.ZERO).value();
+        this.status = OrderStatus.OPEN;
+        this.cancelReason = null;
+    }
+
+    public record CreateCommand(
+            Market market,
+            User user,
+            String clientOrderId,
+            OrderSide orderSide,
+            OrderType orderType,
+            TimeInForce timeInForce,
+            BigDecimal price,
+            BigDecimal quantity,
+            BigDecimal quoteAmount
+    ) {
+    }
 }

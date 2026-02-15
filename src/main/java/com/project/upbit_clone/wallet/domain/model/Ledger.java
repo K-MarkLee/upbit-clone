@@ -1,6 +1,8 @@
 package com.project.upbit_clone.wallet.domain.model;
 
 import com.project.upbit_clone.asset.domain.model.Asset;
+import com.project.upbit_clone.global.domain.vo.NonNegativeAmount;
+import com.project.upbit_clone.global.domain.vo.PositiveAmount;
 import com.project.upbit_clone.wallet.domain.vo.LedgerType;
 import com.project.upbit_clone.wallet.domain.vo.ChangeType;
 import com.project.upbit_clone.wallet.domain.vo.ReferenceType;
@@ -69,8 +71,45 @@ public class Ledger {
     private String idempotencyKey;
 
     // TODO: timestamp(3) ddl적용 예정
-    @Column(name="created_at", insertable=false, updatable=false)
+    @Column(name="created_at", insertable=false, updatable=false, nullable=false)
     private LocalDateTime createdAt;
 
+    public static Ledger create(CreateCommand command) {
+        return new Ledger(command);
+    }
+
+    private Ledger(CreateCommand command) {
+        this.wallet = command.wallet();
+        this.asset = command.asset();
+        this.type = command.type();
+        this.changeType = command.changeType();
+        this.amount = new PositiveAmount(command.amount()).value();
+        this.availableBefore = new NonNegativeAmount(command.availableBefore()).value();
+        this.availableAfter = new NonNegativeAmount(command.availableAfter()).value();
+        this.lockedBefore = new NonNegativeAmount(command.lockedBefore()).value();
+        this.lockedAfter = new NonNegativeAmount(command.lockedAfter()).value();
+        this.referenceType = command.referenceType();
+        this.referenceId = command.referenceId();
+        this.description = command.description();
+        this.idempotencyKey = command.idempotencyKey();
+
+    }
+
+    public record CreateCommand(
+            Wallet wallet,
+            Asset asset,
+            LedgerType type,
+            ChangeType changeType,
+            BigDecimal amount,
+            BigDecimal availableBefore,
+            BigDecimal availableAfter,
+            BigDecimal lockedBefore,
+            BigDecimal lockedAfter,
+            ReferenceType referenceType,
+            Long referenceId,
+            String description,
+            String idempotencyKey
+    ) {
+    }
 
 }
