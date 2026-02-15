@@ -49,7 +49,7 @@ public class Market extends BaseEntity {
     private BigDecimal tickSize;
 
     public static Market create(CreateCommand command) {
-        if (command.baseAsset() == command.quoteAsset()) {
+        if (command.baseAsset().getId().equals(command.quoteAsset().getId())) {
             throw new BusinessException(ErrorCode.DIFFERENT_ASSET_REQUIRED);
         }
         return new Market(command);
@@ -59,7 +59,7 @@ public class Market extends BaseEntity {
         this.baseAsset = command.baseAsset();
         this.quoteAsset = command.quoteAsset();
         this.marketCode = command.marketCode();
-        this.status = (command.status() == null) ? EnumStatus.ACTIVE : command.status();
+        this.status = EnumStatus.ACTIVE;
         this.minOrderQuote = new NonNegativeAmount(command.minOrderQuote()).value();
         this.tickSize = new PositiveAmount(command.tickSize()).value();
     }
@@ -68,7 +68,6 @@ public class Market extends BaseEntity {
             Asset baseAsset,
             Asset quoteAsset,
             String marketCode,
-            EnumStatus status,
             BigDecimal minOrderQuote,
             BigDecimal tickSize
     ) {

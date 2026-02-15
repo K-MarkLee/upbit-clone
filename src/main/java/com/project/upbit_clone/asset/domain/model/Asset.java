@@ -5,7 +5,7 @@ import com.project.upbit_clone.global.domain.vo.AssetDecimals;
 import com.project.upbit_clone.global.domain.vo.EnumStatus;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
-import lombok.Builder;
+
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -31,16 +31,16 @@ public class Asset extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private EnumStatus status = EnumStatus.ACTIVE;
+    private EnumStatus status;
 
-    public static Asset create(String symbol, String name, Byte decimals, EnumStatus status) {
-        return new Asset(symbol, name, decimals, status);
+    public static Asset create(String symbol, String name, Byte decimals) {
+        return new Asset(symbol, name, decimals);
     }
 
-    private Asset(String symbol, String name, Byte decimals, EnumStatus status) {
+    private Asset(String symbol, String name, Byte decimals) {
         this.symbol = symbol;
         this.name = name;
         this.decimals = new AssetDecimals(decimals).value();
-        this.status = (status == null) ? EnumStatus.ACTIVE : status;
+        this.status = EnumStatus.ACTIVE;
     }
 }
