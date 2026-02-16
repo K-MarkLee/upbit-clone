@@ -3,7 +3,6 @@ package com.project.upbit_clone.wallet.domain.model;
 import com.project.upbit_clone.asset.domain.model.Asset;
 import com.project.upbit_clone.global.domain.model.BaseEntity;
 import com.project.upbit_clone.global.domain.vo.NonNegativeAmount;
-import com.project.upbit_clone.global.domain.vo.PositiveAmount;
 import com.project.upbit_clone.global.exception.BusinessException;
 import com.project.upbit_clone.global.exception.ErrorCode;
 import com.project.upbit_clone.user.domain.model.User;

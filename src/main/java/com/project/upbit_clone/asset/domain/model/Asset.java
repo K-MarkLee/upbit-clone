@@ -4,13 +4,14 @@ import com.project.upbit_clone.global.domain.model.BaseEntity;
 import com.project.upbit_clone.global.domain.vo.AssetDecimals;
 import com.project.upbit_clone.global.domain.vo.EnumStatus;
 import com.project.upbit_clone.global.exception.BusinessException;
+
+import com.project.upbit_clone.global.exception.ErrorCode;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import static com.project.upbit_clone.global.exception.ErrorCode.INVALID_ASSET_INPUT;
 
 @Entity
 @Getter
@@ -52,7 +53,7 @@ public class Asset extends BaseEntity {
     // null 검증
     private static void validateCreateInput(String symbol, String name, Byte decimals) {
         if (symbol == null || name == null || decimals == null || symbol.isBlank() || name.isBlank()) {
-            throw new BusinessException(INVALID_ASSET_INPUT);
+            throw new BusinessException(ErrorCode.INVALID_ASSET_INPUT);
         }
     }
 }

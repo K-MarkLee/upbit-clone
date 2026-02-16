@@ -16,6 +16,7 @@ public enum ErrorCode {
 
     //ledger
     INVALID_LEDGER_INPUT("E001", "유효하지 않은 원장 입력입니다.", HttpStatus.BAD_REQUEST),
+    ASSET_NOT_MATCHED("E002", "지갑과 원장의 자산이 동일하지 않습니다.", HttpStatus.BAD_REQUEST),
 
     //order
     INVALID_ORDER_INPUT("D001", "유효하지 않은 주문 입력입니다.", HttpStatus.BAD_REQUEST),
@@ -35,7 +36,6 @@ public enum ErrorCode {
     TRADE_PRICE_MUST_BE_MAKER_PRICE("B003", "체결 가격은 메이커 주문 가격이어야 합니다.", HttpStatus.BAD_REQUEST),
     INVALID_TRADE_INPUT("B004", "유효하지 않은 거래 마켓 입력입니다.", HttpStatus.BAD_REQUEST),
     INVALID_ORDER_SIDE("B005", "거래 타입이 일치해야 합니다.", HttpStatus.BAD_REQUEST),
-
 
 
     //user

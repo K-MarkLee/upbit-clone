@@ -15,8 +15,6 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 
-import static com.project.upbit_clone.global.exception.ErrorCode.INVALID_MARKET_INPUT;
-
 @Entity
 @Getter
 @Table(name = "market")
@@ -99,7 +97,7 @@ public class Market extends BaseEntity {
                 || command.marketCode().isBlank()
                 || command.minOrderQuote() == null
                 || command.tickSize() == null) {
-            throw new BusinessException(INVALID_MARKET_INPUT);
+            throw new BusinessException(ErrorCode.INVALID_MARKET_INPUT);
         }
     }
 }
