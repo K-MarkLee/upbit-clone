@@ -3,11 +3,14 @@ package com.project.upbit_clone.asset.domain.model;
 import com.project.upbit_clone.global.domain.model.BaseEntity;
 import com.project.upbit_clone.global.domain.vo.AssetDecimals;
 import com.project.upbit_clone.global.domain.vo.EnumStatus;
+import com.project.upbit_clone.global.exception.BusinessException;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+
+import static com.project.upbit_clone.global.exception.ErrorCode.INVALID_ASSET_INPUT;
 
 @Entity
 @Getter
@@ -33,14 +36,23 @@ public class Asset extends BaseEntity {
     @Column(name = "status", nullable = false)
     private EnumStatus status;
 
-    public static Asset create(String symbol, String name, Byte decimals) {
-        return new Asset(symbol, name, decimals);
+    public static Asset create(String symbol, String name, Byte decimals, EnumStatus status) {
+        validateCreateInput(symbol, name, decimals);
+
+        return new Asset(symbol, name, decimals, status);
     }
 
-    private Asset(String symbol, String name, Byte decimals) {
+    private Asset(String symbol, String name, Byte decimals, EnumStatus status) {
         this.symbol = symbol;
         this.name = name;
         this.decimals = new AssetDecimals(decimals).value();
-        this.status = EnumStatus.ACTIVE;
+        this.status = (status == null) ? EnumStatus.ACTIVE : status;
+    }
+
+    // null 검증
+    private static void validateCreateInput(String symbol, String name, Byte decimals) {
+        if (symbol == null || name == null || decimals == null || symbol.isBlank() || name.isBlank()) {
+            throw new BusinessException(INVALID_ASSET_INPUT);
+        }
     }
 }

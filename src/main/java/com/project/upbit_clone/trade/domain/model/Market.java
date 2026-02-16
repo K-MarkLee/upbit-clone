@@ -15,6 +15,8 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 
+import static com.project.upbit_clone.global.exception.ErrorCode.INVALID_MARKET_INPUT;
+
 @Entity
 @Getter
 @Table(name = "market")
@@ -37,7 +39,6 @@ public class Market extends BaseEntity {
     @Column(name = "market_code", nullable = false, length = 20)
     private String marketCode;
 
-    // TODO : 디폴트 값 'ACTIVE' 필요
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private EnumStatus status;
@@ -49,17 +50,32 @@ public class Market extends BaseEntity {
     private BigDecimal tickSize;
 
     public static Market create(CreateCommand command) {
-        if (command.baseAsset().getId().equals(command.quoteAsset().getId())) {
+        validateCreateCommand(command);
+
+        // Asset 검증
+        if (isSameAsset(command.baseAsset(), command.quoteAsset())) {
             throw new BusinessException(ErrorCode.DIFFERENT_ASSET_REQUIRED);
         }
         return new Market(command);
+    }
+
+    // 동일한 자산인지 검증. (baseAsset과 quoteAsset이 같을순 없음)
+    private static boolean isSameAsset(Asset baseAsset, Asset quoteAsset) {
+        if (baseAsset == null || quoteAsset == null) {
+            return false;
+        }
+
+        if (baseAsset.getId() != null && quoteAsset.getId() != null) {
+            return baseAsset.getId().equals(quoteAsset.getId());
+        }
+        return baseAsset == quoteAsset;
     }
 
     private Market(CreateCommand command) {
         this.baseAsset = command.baseAsset();
         this.quoteAsset = command.quoteAsset();
         this.marketCode = command.marketCode();
-        this.status = EnumStatus.ACTIVE;
+        this.status = (command.status() == null) ? EnumStatus.ACTIVE : command.status();
         this.minOrderQuote = new NonNegativeAmount(command.minOrderQuote()).value();
         this.tickSize = new PositiveAmount(command.tickSize()).value();
     }
@@ -68,8 +84,22 @@ public class Market extends BaseEntity {
             Asset baseAsset,
             Asset quoteAsset,
             String marketCode,
+            EnumStatus status,
             BigDecimal minOrderQuote,
             BigDecimal tickSize
     ) {
+    }
+
+    // null 검증
+    public static void validateCreateCommand(CreateCommand command) {
+        if (command == null
+                || command.baseAsset() == null
+                || command.quoteAsset() == null
+                || command.marketCode() == null
+                || command.marketCode().isBlank()
+                || command.minOrderQuote() == null
+                || command.tickSize() == null) {
+            throw new BusinessException(INVALID_MARKET_INPUT);
+        }
     }
 }

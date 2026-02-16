@@ -4,6 +4,7 @@ import com.project.upbit_clone.global.domain.vo.NonNegativeAmount;
 import com.project.upbit_clone.global.domain.vo.PositiveAmount;
 import com.project.upbit_clone.global.exception.BusinessException;
 import com.project.upbit_clone.global.exception.ErrorCode;
+import com.project.upbit_clone.trade.domain.vo.OrderSide;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -18,6 +19,8 @@ import java.util.Objects;
 @Table(name = "trade")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Trade {
+
+    private static final BigDecimal DEFAULT_FEE_RATE = new BigDecimal("0.0005");
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -36,8 +39,9 @@ public class Trade {
     @JoinColumn(name = "sell_order_id", nullable = false)
     private Order sellOrder;
 
-    @Column(name = "is_buyer_maker", nullable = false)
-    private Boolean isBuyerMaker;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "maker_order_side", nullable = false)
+    private OrderSide makerOrderSide;
 
     @Column(name = "price", precision = 30, scale = 8, nullable = false)
     private BigDecimal price;
@@ -63,6 +67,11 @@ public class Trade {
     public static Trade create(CreateCommand command) {
         validateCreateCommand(command);
 
+        // buyOrder와 sellOrder가 각 BID와 ASK가 맞는지 검증.
+        if (command.buyOrder().getOrderSide() != OrderSide.BID || command.sellOrder().getOrderSide() != OrderSide.ASK) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER_SIDE);
+        }
+
         // 거래 시 구매자의 아이디와 판매자의 아이디가 다른지 검증.
         if (command.buyOrder().getUser().getId().equals(command.sellOrder().getUser().getId())) {
             throw new BusinessException(ErrorCode.SELF_TRADE_NOT_ALLOWED);
@@ -75,7 +84,7 @@ public class Trade {
         }
 
         // 체결가가 maker 의 가격이 맞는지 검증.
-        BigDecimal makerPrice = Boolean.TRUE.equals(command.isBuyerMaker())
+        BigDecimal makerPrice = (command.makerOrderSide() == OrderSide.BID)
                 ? command.buyOrder().getPrice()
                 : command.sellOrder().getPrice();
         if (makerPrice == null || command.price().compareTo(makerPrice) != 0) {
@@ -91,10 +100,8 @@ public class Trade {
             return true;
         }
 
-        Long leftId = left.getId();
-        Long rightId = right.getId();
-        if (leftId != null && rightId != null) {
-            return !Objects.equals(leftId, rightId);
+        if (left.getId() != null && right.getId() != null) {
+            return !Objects.equals(left.getId(), right.getId());
         }
         return left != right;
     }
@@ -103,11 +110,11 @@ public class Trade {
         this.market = command.market();
         this.buyOrder = command.buyOrder();
         this.sellOrder = command.sellOrder();
-        this.isBuyerMaker = command.isBuyerMaker();
+        this.makerOrderSide = command.makerOrderSide;
         this.price = new PositiveAmount(command.price()).value();
         this.quantity = new PositiveAmount(command.quantity()).value();
         this.quoteAmount = new PositiveAmount(command.quoteAmount()).value();
-        this.feeRate = new NonNegativeAmount(command.feeRate() == null ? BigDecimal.ZERO : command.feeRate()).value();
+        this.feeRate = new NonNegativeAmount(command.feeRate() == null ? DEFAULT_FEE_RATE : command.feeRate()).value();
         this.buyFeeAmount = new NonNegativeAmount(
                 command.buyFeeAmount() == null ? BigDecimal.ZERO : command.buyFeeAmount()).value();
         this.sellFeeAmount = new NonNegativeAmount(
@@ -118,7 +125,7 @@ public class Trade {
             Market market,
             Order buyOrder,
             Order sellOrder,
-            Boolean isBuyerMaker,
+            OrderSide makerOrderSide,
             BigDecimal price,
             BigDecimal quantity,
             BigDecimal quoteAmount,
@@ -134,7 +141,7 @@ public class Trade {
                 || command.market() == null
                 || command.buyOrder() == null
                 || command.sellOrder() == null
-                || command.isBuyerMaker() == null
+                || command.makerOrderSide() == null
                 || command.price() == null
                 || command.quantity() == null
                 || command.quoteAmount() == null) {

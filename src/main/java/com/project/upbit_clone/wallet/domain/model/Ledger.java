@@ -3,6 +3,7 @@ package com.project.upbit_clone.wallet.domain.model;
 import com.project.upbit_clone.asset.domain.model.Asset;
 import com.project.upbit_clone.global.domain.vo.NonNegativeAmount;
 import com.project.upbit_clone.global.domain.vo.PositiveAmount;
+import com.project.upbit_clone.global.exception.BusinessException;
 import com.project.upbit_clone.wallet.domain.vo.LedgerType;
 import com.project.upbit_clone.wallet.domain.vo.ChangeType;
 import com.project.upbit_clone.wallet.domain.vo.ReferenceType;
@@ -14,6 +15,8 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+
+import static com.project.upbit_clone.global.exception.ErrorCode.INVALID_LEDGER_INPUT;
 
 @Entity
 @Getter
@@ -75,6 +78,8 @@ public class Ledger {
     private LocalDateTime createdAt;
 
     public static Ledger create(CreateCommand command) {
+        validateCreateCommand(command);
+
         return new Ledger(command);
     }
 
@@ -110,6 +115,26 @@ public class Ledger {
             String description,
             String idempotencyKey
     ) {
+    }
+
+    // null 검증.
+    public static void validateCreateCommand(CreateCommand command) {
+        if (command == null
+                || command.wallet() == null
+                || command.asset() == null
+                || command.type() == null
+                || command.changeType() == null
+                || command.amount() == null
+                || command.availableBefore() == null
+                || command.availableAfter() == null
+                || command.lockedBefore() == null
+                || command.lockedAfter() == null
+                || command.description() == null
+                || command.description().isBlank()
+                || command.idempotencyKey() == null
+                || command.idempotencyKey().isBlank()) {
+            throw new BusinessException(INVALID_LEDGER_INPUT);
+        }
     }
 
 }
