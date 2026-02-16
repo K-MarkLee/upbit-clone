@@ -4,6 +4,8 @@ import com.project.upbit_clone.asset.domain.model.Asset;
 import com.project.upbit_clone.global.domain.model.BaseEntity;
 import com.project.upbit_clone.global.domain.vo.NonNegativeAmount;
 import com.project.upbit_clone.global.domain.vo.PositiveAmount;
+import com.project.upbit_clone.global.exception.BusinessException;
+import com.project.upbit_clone.global.exception.ErrorCode;
 import com.project.upbit_clone.user.domain.model.User;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -31,23 +33,33 @@ public class Wallet extends BaseEntity {
     private Asset asset;
 
     @Column(name = "available_balance", precision = 30, scale = 8, nullable = false)
-    private BigDecimal availableBalance = BigDecimal.ZERO;
+    private BigDecimal availableBalance;
 
     @Column(name = "locked_balance", precision = 30, scale = 8, nullable = false)
-    private BigDecimal lockedBalance = BigDecimal.ZERO;
+    private BigDecimal lockedBalance;
 
     @Version
     @Column(name = "version", nullable = false)
     private Long version;
 
     public static Wallet create(User user, Asset asset, BigDecimal availableBalance, BigDecimal lockedBalance) {
+        validateCreateInput(user, asset);
+
         return new Wallet(user, asset, availableBalance, lockedBalance);
     }
 
     private Wallet(User user, Asset asset, BigDecimal availableBalance, BigDecimal lockedBalance) {
         this.user = user;
         this.asset = asset;
-        this.availableBalance = new NonNegativeAmount(availableBalance).value();
-        this.lockedBalance = new NonNegativeAmount(lockedBalance).value();
+        this.availableBalance = new NonNegativeAmount(availableBalance == null ? BigDecimal.ZERO : availableBalance).value();
+        this.lockedBalance = new NonNegativeAmount(lockedBalance == null ? BigDecimal.ZERO : lockedBalance).value();
     }
+
+    // null 검증.
+    public static void validateCreateInput(User user, Asset asset) {
+        if (user == null || asset == null) {
+            throw new BusinessException(ErrorCode.INVALID_WALLET_INPUT);
+        }
+    }
+
 }

@@ -48,7 +48,7 @@ public class Order extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "time_in_force", nullable = false)
-    private TimeInForce timeInForce = TimeInForce.GTC;
+    private TimeInForce timeInForce;
 
     @Column(name = "price", precision = 30, scale = 8)
     private BigDecimal price;
@@ -74,16 +74,45 @@ public class Order extends BaseEntity {
 
     public static Order create(CreateCommand command) {
         validateCreateCommand(command);
-
-        // FOK는 현재 미지원.
-        if (command.timeInForce() == TimeInForce.FOK) {
-            throw new BusinessException(ErrorCode.UNSUPPORTED_TIME_IN_FORCE);
-        }
-
         validateCreatePolicy(command);
+        validateMarketPolicy(command);
 
-        return new Order(command);
+        TimeInForce resolvedTif = resolveTimeInForce(command.orderType(), command.timeInForce());
+
+        return new Order(command, resolvedTif);
     }
+
+    private Order(CreateCommand command, TimeInForce resolvedTif) {
+        this.market = command.market();
+        this.user = command.user();
+        this.clientOrderId = command.clientOrderId();
+        this.orderSide = command.orderSide();
+        this.orderType = command.orderType();
+        this.timeInForce = resolvedTif;
+        this.price = command.price();
+        this.quantity = command.quantity();
+        this.quoteAmount = command.quoteAmount();
+        this.executedQuantity = new NonNegativeAmount(BigDecimal.ZERO).value();
+        this.executedQuoteAmount = new NonNegativeAmount(BigDecimal.ZERO).value();
+        this.status = OrderStatus.OPEN;
+        this.cancelReason = null;
+    }
+
+    public record CreateCommand(
+            Market market,
+            User user,
+            String clientOrderId,
+            OrderSide orderSide,
+            OrderType orderType,
+            TimeInForce timeInForce,
+            BigDecimal price,
+            BigDecimal quantity,
+            BigDecimal quoteAmount
+    ) {
+    }
+
+
+    /*************검증 및 정책 *************/
 
     // 주문 정책 검증
     private static void validateCreatePolicy(CreateCommand command) {
@@ -114,13 +143,77 @@ public class Order extends BaseEntity {
         throw new BusinessException(ErrorCode.INVALID_ORDER_INPUT);
     }
 
+    // 거래 정책 검증
+    private static void validateMarketPolicy(CreateCommand command) {
+        Market market = command.market();
+        BigDecimal tickSize = market.getTickSize();
+        BigDecimal minOrderQuote = market.getMinOrderQuote();
+
+        /*
+         * 지정가 거래시
+         * price % tickSize == 0
+         * price * quantity >= minOrderQuote
+         * */
+        if (command.orderType() == OrderType.LIMIT) {
+            ErrorCode errorCode = (command.orderSide() == OrderSide.BID)
+                    ? ErrorCode.INVALID_LIMIT_BID_INPUT
+                    : ErrorCode.INVALID_LIMIT_ASK_INPUT;
+            validateTickSize(command.price(), tickSize, errorCode);
+            validateMinOrderQuote(command.price().multiply(command.quantity()), minOrderQuote, errorCode);
+            return;
+        }
+
+        /*
+         * 시장가 매수시
+         * quoteAmount >= minOrderQuote
+         * */
+        if (command.orderType() == OrderType.MARKET && command.orderSide() == OrderSide.BID) {
+            validateMinOrderQuote(command.quoteAmount(), minOrderQuote, ErrorCode.INVALID_MARKET_BID_INPUT);
+        }
+    }
+
+    // 주문 조건 검증
+    private static TimeInForce resolveTimeInForce(OrderType orderType, TimeInForce timeInForce) {
+        // FOK는 미지원
+        if (timeInForce == TimeInForce.FOK) {
+            throw new BusinessException(ErrorCode.UNSUPPORTED_TIME_IN_FORCE);
+        }
+
+        // IOC는 시장 거래시
+        if (orderType == OrderType.MARKET) {
+            if (timeInForce == null || timeInForce == TimeInForce.IOC) {
+                return TimeInForce.IOC;
+            }
+            throw new BusinessException(ErrorCode.INVALID_ORDER_INPUT);
+        }
+
+        // GTC는 디폴트
+        if (timeInForce == null || timeInForce == TimeInForce.GTC) {
+            return TimeInForce.GTC;
+        }
+        throw new BusinessException(ErrorCode.INVALID_ORDER_INPUT);
+    }
+
+    // null 검증.
+    private static void validateCreateCommand(Order.CreateCommand command) {
+        if (command == null
+                || command.market() == null
+                || command.user() == null
+                || command.clientOrderId() == null
+                || command.clientOrderId().isBlank()
+                || command.orderSide() == null
+                || command.orderType() == null) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER_INPUT);
+        }
+    }
+
     /*
-    * 지정가 매수 정책
-    * 허용 : price, quantity
-    * 금지 : quoteAmount
-    * 범위 : price > 0, quantity > 0
-    * 예시 : KRW M원에 BTC N개 매수예약
-    * */
+     * 지정가 매수 정책
+     * 허용 : price, quantity
+     * 금지 : quoteAmount
+     * 범위 : price > 0, quantity > 0
+     * 예시 : KRW M원에 BTC N개 매수예약
+     * */
     private static void validateLimitBidPolicy(
             CreateCommand command, boolean hasPrice, boolean hasQuantity, boolean hasQuoteAmount
     ) {
@@ -132,12 +225,12 @@ public class Order extends BaseEntity {
     }
 
     /*
-    * 지정가 매도 정책
-    * 허용 : price, quantity
-    * 금지 : quoteAmount
-    * 범위 : price > 0, quantity > 0
-    * 예시 : BTC N개를 KRW M원에 매도예약
-    * */
+     * 지정가 매도 정책
+     * 허용 : price, quantity
+     * 금지 : quoteAmount
+     * 범위 : price > 0, quantity > 0
+     * 예시 : BTC N개를 KRW M원에 매도예약
+     * */
     private static void validateLimitAskPolicy(
             CreateCommand command, boolean hasPrice, boolean hasQuantity, boolean hasQuoteAmount
     ) {
@@ -149,12 +242,12 @@ public class Order extends BaseEntity {
     }
 
     /*
-    * 시장가 매수 정책
-    * 허용 : quoteAmount
-    * 금지 : price, quantity
-    * 범위 : quoteAmount > 0
-    * 예시 : M원에 가능한 만큼 매수
-    * */
+     * 시장가 매수 정책
+     * 허용 : quoteAmount
+     * 금지 : price, quantity
+     * 범위 : quoteAmount > 0
+     * 예시 : M원에 가능한 만큼 매수
+     * */
     private static void validateMarketBidPolicy(
             CreateCommand command, boolean hasPrice, boolean hasQuantity, boolean hasQuoteAmount
     ) {
@@ -165,12 +258,12 @@ public class Order extends BaseEntity {
     }
 
     /*
-    * 시장가 매도 정책
-    * 허용 : quantity
-    * 금지 : price, quoteAmount
-    * 범위 : quantity > 0
-    * 예시 : N개를 시장가에 매도
-    * */
+     * 시장가 매도 정책
+     * 허용 : quantity
+     * 금지 : price, quoteAmount
+     * 범위 : quantity > 0
+     * 예시 : N개를 시장가에 매도
+     * */
     private static void validateMarketAskPolicy(
             CreateCommand command, boolean hasPrice, boolean hasQuantity, boolean hasQuoteAmount
     ) {
@@ -187,44 +280,21 @@ public class Order extends BaseEntity {
         }
     }
 
-    private Order(CreateCommand command) {
-        this.market = command.market();
-        this.user = command.user();
-        this.clientOrderId = command.clientOrderId();
-        this.orderSide = command.orderSide();
-        this.orderType = command.orderType();
-        this.timeInForce = (command.timeInForce() == null) ? TimeInForce.GTC : command.timeInForce();
-        this.price = command.price();
-        this.quantity = command.quantity();
-        this.quoteAmount = command.quoteAmount();
-        this.executedQuantity = new NonNegativeAmount(BigDecimal.ZERO).value();
-        this.executedQuoteAmount = new NonNegativeAmount(BigDecimal.ZERO).value();
-        this.status = OrderStatus.OPEN;
-        this.cancelReason = null;
-    }
-
-    public record CreateCommand(
-            Market market,
-            User user,
-            String clientOrderId,
-            OrderSide orderSide,
-            OrderType orderType,
-            TimeInForce timeInForce,
-            BigDecimal price,
-            BigDecimal quantity,
-            BigDecimal quoteAmount
-    ) {
-    }
-
-    // null 검증.
-    private static void validateCreateCommand(Order.CreateCommand command) {
-        if (command == null
-        || command.market() == null
-        || command.user() == null
-        || command.clientOrderId() == null
-        || command.orderSide() == null
-        || command.orderType() == null) {
-            throw new BusinessException(ErrorCode.INVALID_ORDER_INPUT);
+    // tick_size 검증. (price를 tick_size로 나눴을떄 나머지가 0이어야함.)
+    private static void validateTickSize(BigDecimal price, BigDecimal tickSize, ErrorCode errorCode) {
+        // remainder로 나머지를 구하고 compareTo로 비교.
+        if (price.remainder(tickSize).compareTo(BigDecimal.ZERO) != 0) {
+            throw new BusinessException(errorCode);
         }
     }
+
+    // min_order_quote 검증.
+    private static void validateMinOrderQuote(BigDecimal value, BigDecimal minOrderQuote, ErrorCode errorCode) {
+        //
+        if (value.compareTo(minOrderQuote) < 0) {
+            throw new BusinessException(errorCode);
+        }
+    }
+
+
 }
