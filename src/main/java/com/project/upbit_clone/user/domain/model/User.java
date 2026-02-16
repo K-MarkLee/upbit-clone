@@ -28,7 +28,7 @@ public class User extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private EnumStatus status = EnumStatus.ACTIVE;
+    private EnumStatus status;
 
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
@@ -40,7 +40,7 @@ public class User extends BaseEntity {
     private User(String email, String userName, EnumStatus status, String passwordHash) {
         this.email = email;
         this.userName = userName;
-        this.status = (status == null) ? EnumStatus.ACTIVE : status;
+        this.status = EnumStatus.ACTIVE;
         this.passwordHash = passwordHash;
     }
 }

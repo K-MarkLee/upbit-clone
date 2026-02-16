@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 @Entity
 @Getter
@@ -60,10 +61,42 @@ public class Trade {
     private LocalDateTime executedAt;
 
     public static Trade create(CreateCommand command) {
+        validateCreateCommand(command);
+
+        // 거래 시 구매자의 아이디와 판매자의 아이디가 다른지 검증.
         if (command.buyOrder().getUser().getId().equals(command.sellOrder().getUser().getId())) {
             throw new BusinessException(ErrorCode.SELF_TRADE_NOT_ALLOWED);
         }
+
+        // 체결의 market과 양쪽 주문의 market은 모두 같은지 검증.
+        if (isDifferentMarket(command.market(), command.buyOrder().getMarket())
+                || isDifferentMarket(command.market(), command.sellOrder().getMarket())) {
+            throw new BusinessException(ErrorCode.TRADE_MARKET_MISMATCH);
+        }
+
+        // 체결가가 maker 의 가격이 맞는지 검증.
+        BigDecimal makerPrice = Boolean.TRUE.equals(command.isBuyerMaker())
+                ? command.buyOrder().getPrice()
+                : command.sellOrder().getPrice();
+        if (makerPrice == null || command.price().compareTo(makerPrice) != 0) {
+            throw new BusinessException(ErrorCode.TRADE_PRICE_MUST_BE_MAKER_PRICE);
+        }
+
         return new Trade(command);
+    }
+
+    // left 와 right 마켓이 같으면 false, 맞으면 true 반환.
+    private static boolean isDifferentMarket(Market left, Market right) {
+        if (left == null || right == null) {
+            return true;
+        }
+
+        Long leftId = left.getId();
+        Long rightId = right.getId();
+        if (leftId != null && rightId != null) {
+            return !Objects.equals(leftId, rightId);
+        }
+        return left != right;
     }
 
     private Trade(CreateCommand command) {
@@ -94,4 +127,19 @@ public class Trade {
             BigDecimal sellFeeAmount
     ) {
     }
+
+    // 생성자 null 검증.
+    private static void validateCreateCommand(CreateCommand command) {
+        if (command == null
+                || command.market() == null
+                || command.buyOrder() == null
+                || command.sellOrder() == null
+                || command.isBuyerMaker() == null
+                || command.price() == null
+                || command.quantity() == null
+                || command.quoteAmount() == null) {
+            throw new BusinessException(ErrorCode.INVALID_TRADE_INPUT);
+        }
+    }
+
 }
