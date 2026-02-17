@@ -4,6 +4,7 @@ import com.project.upbit_clone.asset.domain.model.Asset;
 import com.project.upbit_clone.global.domain.vo.NonNegativeAmount;
 import com.project.upbit_clone.global.domain.vo.PositiveAmount;
 import com.project.upbit_clone.global.exception.BusinessException;
+import com.project.upbit_clone.global.exception.ErrorCode;
 import com.project.upbit_clone.wallet.domain.vo.LedgerType;
 import com.project.upbit_clone.wallet.domain.vo.ChangeType;
 import com.project.upbit_clone.wallet.domain.vo.ReferenceType;
@@ -15,8 +16,8 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Objects;
 
-import static com.project.upbit_clone.global.exception.ErrorCode.INVALID_LEDGER_INPUT;
 
 @Entity
 @Getter
@@ -38,8 +39,8 @@ public class Ledger {
     private Asset asset;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "type", nullable = false)
-    private LedgerType type;
+    @Column(name = "ledger_type", nullable = false)
+    private LedgerType ledgerType;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "change_type", nullable = false)
@@ -80,13 +81,15 @@ public class Ledger {
     public static Ledger create(CreateCommand command) {
         validateCreateCommand(command);
 
+        validateWalletAssetMatch(command);
+
         return new Ledger(command);
     }
 
     private Ledger(CreateCommand command) {
         this.wallet = command.wallet();
         this.asset = command.asset();
-        this.type = command.type();
+        this.ledgerType = command.ledgerType();
         this.changeType = command.changeType();
         this.amount = new PositiveAmount(command.amount()).value();
         this.availableBefore = new NonNegativeAmount(command.availableBefore()).value();
@@ -103,7 +106,7 @@ public class Ledger {
     public record CreateCommand(
             Wallet wallet,
             Asset asset,
-            LedgerType type,
+            LedgerType ledgerType,
             ChangeType changeType,
             BigDecimal amount,
             BigDecimal availableBefore,
@@ -122,18 +125,24 @@ public class Ledger {
         if (command == null
                 || command.wallet() == null
                 || command.asset() == null
-                || command.type() == null
+                || command.ledgerType() == null
                 || command.changeType() == null
                 || command.amount() == null
                 || command.availableBefore() == null
                 || command.availableAfter() == null
                 || command.lockedBefore() == null
                 || command.lockedAfter() == null
-                || command.description() == null
-                || command.description().isBlank()
+                || command.referenceType() == null
                 || command.idempotencyKey() == null
                 || command.idempotencyKey().isBlank()) {
-            throw new BusinessException(INVALID_LEDGER_INPUT);
+            throw new BusinessException(ErrorCode.INVALID_LEDGER_INPUT);
+        }
+    }
+
+    // wallet의 자산과 ledger의 자산이 동일한지 검증.
+    private static void validateWalletAssetMatch(CreateCommand command) {
+        if (!Objects.equals(command.wallet().getAsset().getId(), command.asset().getId())) {
+            throw new BusinessException(ErrorCode.ASSET_NOT_MATCHED);
         }
     }
 
