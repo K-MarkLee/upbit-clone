@@ -19,7 +19,7 @@ import java.math.BigDecimal;
 @Table(
         name = "wallet",
         uniqueConstraints = {
-                @UniqueConstraint(name = "uk_wallet_user_asset", columnNames = {"user_id", "client_order_id"})
+                @UniqueConstraint(name = "uk_wallet_user_asset", columnNames = {"user_id", "asset_id"})
         }
 )
 public class Wallet extends BaseEntity {
