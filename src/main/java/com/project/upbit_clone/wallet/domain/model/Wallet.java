@@ -16,7 +16,12 @@ import java.math.BigDecimal;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Table(name = "wallet")
+@Table(
+        name = "wallet",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_wallet_user_asset", columnNames = {"user_id", "client_order_id"})
+        }
+)
 public class Wallet extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

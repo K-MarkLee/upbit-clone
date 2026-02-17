@@ -158,7 +158,7 @@ class TradeTest {
         // when & then
         assertThatThrownBy(() -> Trade.create(command))
                 .isInstanceOf(BusinessException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_ORDER_SIDE);
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ORDER_SIDE_NOT_MATCHED);
     }
 
     private static Stream<Arguments> invalidOrderSideCommands() {
@@ -231,7 +231,7 @@ class TradeTest {
         // when & then
         assertThatThrownBy(() -> Trade.create(command))
                 .isInstanceOf(BusinessException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.TRADE_MARKET_MISMATCH);
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.TRADE_MARKET_NOT_MATCHED);
     }
 
     @ParameterizedTest(name = "[{index}] {0}")

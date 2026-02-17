@@ -18,7 +18,12 @@ import java.math.BigDecimal;
 
 @Entity
 @Getter
-@Table(name = "orders")
+@Table(
+        name = "orders",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_orders_client", columnNames = {"user_id", "client_order_id"})
+        }
+)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Order extends BaseEntity {
 
