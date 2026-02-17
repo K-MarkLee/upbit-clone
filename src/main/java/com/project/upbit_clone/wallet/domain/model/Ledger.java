@@ -74,7 +74,6 @@ public class Ledger {
     @Column(name = "idempotency_key", nullable = false, length = 150, unique = true)
     private String idempotencyKey;
 
-    // TODO: timestamp(3) ddl적용 예정
     @Column(name="created_at", insertable=false, updatable=false, nullable=false)
     private LocalDateTime createdAt;
 
@@ -141,7 +140,16 @@ public class Ledger {
 
     // wallet의 자산과 ledger의 자산이 동일한지 검증.
     private static void validateWalletAssetMatch(CreateCommand command) {
-        if (!Objects.equals(command.wallet().getAsset().getId(), command.asset().getId())) {
+        Asset walletAsset = command.wallet().getAsset();
+        Asset ledgerAsset = command.asset();
+        if (walletAsset == null || ledgerAsset == null) {
+            throw new BusinessException(ErrorCode.INVALID_LEDGER_INPUT);
+        }
+        boolean matched = (walletAsset.getId() != null && ledgerAsset.getId() != null)
+                ? Objects.equals(walletAsset.getId(), ledgerAsset.getId())
+                : Objects.equals(walletAsset, ledgerAsset);
+
+        if (!matched) {
             throw new BusinessException(ErrorCode.ASSET_NOT_MATCHED);
         }
     }
