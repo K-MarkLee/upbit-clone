@@ -197,7 +197,7 @@ class OrderTest {
         assertThat(order.getOrderType()).isEqualTo(OrderType.MARKET);
         assertThat(order.getTimeInForce()).isEqualTo(TimeInForce.IOC);
         assertThat(order.getPrice()).isNull();
-        assertThat(order.getQuantity()).isEqualTo("1");
+        assertThat(order.getQuantity()).isEqualTo(new BigDecimal("1"));
         assertThat(order.getQuoteAmount()).isNull();
     }
 

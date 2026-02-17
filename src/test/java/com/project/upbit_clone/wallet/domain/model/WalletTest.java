@@ -51,7 +51,7 @@ class WalletTest {
         // then
         assertThat(wallet).isNotNull();
         assertThat(wallet.getAsset()).isEqualTo(asset);
-        assertThat(wallet.getAvailableBalance()).isEqualTo("0");
+        assertThat(wallet.getAvailableBalance()).isEqualTo(BigDecimal.ZERO);
         assertThat(wallet.getLockedBalance()).isEqualTo(lockedBalance);
     }
 
@@ -65,7 +65,7 @@ class WalletTest {
         assertThat(wallet).isNotNull();
         assertThat(wallet.getAsset()).isEqualTo(asset);
         assertThat(wallet.getAvailableBalance()).isEqualTo(availableBalance);
-        assertThat(wallet.getLockedBalance()).isEqualTo("0");
+        assertThat(wallet.getLockedBalance()).isEqualTo(BigDecimal.ZERO);
     }
 
     @Test
