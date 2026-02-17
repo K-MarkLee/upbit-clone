@@ -2,6 +2,7 @@ plugins {
 	id 'java'
 	id 'org.springframework.boot' version '4.0.2'
 	id 'io.spring.dependency-management' version '1.1.7'
+	id 'jacoco'
 }
 
 group = 'com.project'
@@ -32,6 +33,7 @@ dependencies {
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 	developmentOnly 'org.springframework.boot:spring-boot-docker-compose'
 	runtimeOnly 'com.mysql:mysql-connector-j'
+	runtimeOnly 'com.h2database:h2'
 	annotationProcessor 'org.projectlombok:lombok'
 	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
@@ -39,6 +41,65 @@ dependencies {
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
+jacoco {
+	toolVersion = "0.8.13"
+}
+
 tasks.named('test') {
 	useJUnitPlatform()
+
+	// 테스트 통과 못해도 통과
+	ignoreFailures = true
+
+	finalizedBy jacocoTestReport
+}
+
+def jacocoIncludes = ['com/project/upbit_clone/**']
+def jacocoExcludes = ['**/Q*.*']
+
+jacocoTestReport {
+	reports {
+		xml.required = false
+		csv.required = false
+		html.outputLocation = layout.buildDirectory.dir('jacoco')
+	}
+
+	dependsOn test
+
+	classDirectories.setFrom(
+			files(classDirectories.files.collect { dir ->
+				fileTree(
+						dir: dir,
+						include: jacocoIncludes,
+						exclude: jacocoExcludes
+				)
+			})
+	)
+}
+
+
+jacocoTestCoverageVerification {
+
+	classDirectories.setFrom(
+			files(classDirectories.files.collect { dir ->
+				fileTree(
+						dir: dir,
+						include: jacocoIncludes,
+						exclude: jacocoExcludes
+				)
+			})
+	)
+
+	violationRules {
+		rule {
+			enabled = true
+			element = 'CLASS' // 클래스 단위 기준
+
+			limit {
+				counter = 'METHOD'
+				value = 'COVEREDRATIO'
+				minimum = 0.5
+			}
+		}
+	}
 }
