@@ -17,7 +17,12 @@ import java.math.BigDecimal;
 
 @Entity
 @Getter
-@Table(name = "market")
+@Table(
+        name = "market",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_market_code", columnNames = "market_code")
+        }
+)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Market extends BaseEntity {
 
@@ -51,22 +56,10 @@ public class Market extends BaseEntity {
         validateCreateCommand(command);
 
         // Asset 검증
-        if (isSameAsset(command.baseAsset(), command.quoteAsset())) {
+        if (command.baseAsset().isSameAsset(command.quoteAsset())) {
             throw new BusinessException(ErrorCode.DIFFERENT_ASSET_REQUIRED);
         }
         return new Market(command);
-    }
-
-    // 동일한 자산인지 검증. (baseAsset과 quoteAsset이 같을순 없음)
-    private static boolean isSameAsset(Asset baseAsset, Asset quoteAsset) {
-        if (baseAsset == null || quoteAsset == null) {
-            return false;
-        }
-
-        if (baseAsset.getId() != null && quoteAsset.getId() != null) {
-            return baseAsset.getId().equals(quoteAsset.getId());
-        }
-        return baseAsset == quoteAsset;
     }
 
     private Market(CreateCommand command) {

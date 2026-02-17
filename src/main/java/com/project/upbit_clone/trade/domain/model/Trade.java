@@ -69,7 +69,7 @@ public class Trade {
 
         // buyOrder와 sellOrder가 각 BID와 ASK가 맞는지 검증.
         if (command.buyOrder().getOrderSide() != OrderSide.BID || command.sellOrder().getOrderSide() != OrderSide.ASK) {
-            throw new BusinessException(ErrorCode.INVALID_ORDER_SIDE);
+            throw new BusinessException(ErrorCode.ORDER_SIDE_NOT_MATCHED);
         }
 
         // 거래 시 구매자의 아이디와 판매자의 아이디가 다른지 검증.
@@ -80,7 +80,7 @@ public class Trade {
         // 체결의 market과 양쪽 주문의 market은 모두 같은지 검증.
         if (isDifferentMarket(command.market(), command.buyOrder().getMarket())
                 || isDifferentMarket(command.market(), command.sellOrder().getMarket())) {
-            throw new BusinessException(ErrorCode.TRADE_MARKET_MISMATCH);
+            throw new BusinessException(ErrorCode.TRADE_MARKET_NOT_MATCHED);
         }
 
         // 체결가가 maker 의 가격이 맞는지 검증.

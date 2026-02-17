@@ -12,11 +12,18 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.util.Objects;
+
 
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Table(name = "asset")
+@Table(
+        name = "asset",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_asset_symbol", columnNames = "symbol")
+        }
+)
 public class Asset extends BaseEntity {
 
     @Id
@@ -55,5 +62,16 @@ public class Asset extends BaseEntity {
         if (symbol == null || name == null || decimals == null || symbol.isBlank() || name.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_ASSET_INPUT);
         }
+    }
+
+    // 동일 자산인지 비교한다. (id가 없으면 symbol 기준으로 비교)
+    public boolean isSameAsset(Asset other) {
+        if (other == null) {
+            return false;
+        }
+        if (this.id != null && other.id != null) {
+            return Objects.equals(this.id, other.id);
+        }
+        return Objects.equals(this.symbol, other.symbol);
     }
 }

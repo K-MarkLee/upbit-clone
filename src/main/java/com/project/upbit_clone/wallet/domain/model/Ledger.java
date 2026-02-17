@@ -22,7 +22,12 @@ import java.util.Objects;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Table(name = "ledger")
+@Table(
+        name = "ledger",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_ledger_idempotency", columnNames = "idempotency_key")
+        }
+)
 public class Ledger {
 
     @Id
@@ -71,7 +76,7 @@ public class Ledger {
     @Column(name = "description")
     private String description;
 
-    @Column(name = "idempotency_key", nullable = false, length = 150, unique = true)
+    @Column(name = "idempotency_key", nullable = false, length = 150)
     private String idempotencyKey;
 
     @Column(name="created_at", insertable=false, updatable=false, nullable=false)
