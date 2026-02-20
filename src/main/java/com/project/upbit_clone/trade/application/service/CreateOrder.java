@@ -22,10 +22,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 @Service
 @RequiredArgsConstructor
 public class CreateOrder {
+    private static final RoundingMode LOCK_AMOUNT_ROUNDING_MODE = RoundingMode.DOWN;
 
     private final OrderRepository orderRepository;
     private final UserRepository userRepository;
@@ -58,7 +60,8 @@ public class CreateOrder {
 
         // 지갑, 금액 검증
         Wallet lockWallet = loadWallet(order);
-        BigDecimal lockAmount = calculateLockAmount(order);
+        BigDecimal rawLockAmount = calculateLockAmount(order);
+        BigDecimal lockAmount = normalizeLockAmount(rawLockAmount, lockWallet);
         BigDecimal availableBefore = lockWallet.getAvailableBalance();
         BigDecimal lockedBefore = lockWallet.getLockedBalance();
 
@@ -115,6 +118,20 @@ public class CreateOrder {
         }
 
         throw new BusinessException(ErrorCode.INVALID_ORDER_INPUT);
+    }
+
+    // 지갑 자산 소수점 스케일 기준으로 락 금액을 정규화한다.
+    private static BigDecimal normalizeLockAmount(BigDecimal rawLockAmount, Wallet lockWallet) {
+        Byte decimals = lockWallet.getAsset().getDecimals();
+        if (decimals == null || decimals < 0) {
+            throw new BusinessException(ErrorCode.INVALID_ASSET_DECIMALS);
+        }
+
+        BigDecimal normalized = rawLockAmount.setScale(decimals, LOCK_AMOUNT_ROUNDING_MODE);
+        if (normalized.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException(ErrorCode.LOCK_AMOUNT_TOO_LOW);
+        }
+        return normalized;
     }
 
     // 원장 생성
