@@ -3,6 +3,7 @@ package com.project.upbit_clone.wallet.domain.model;
 import com.project.upbit_clone.asset.domain.model.Asset;
 import com.project.upbit_clone.global.domain.model.BaseEntity;
 import com.project.upbit_clone.global.domain.vo.NonNegativeAmount;
+import com.project.upbit_clone.global.domain.vo.PositiveAmount;
 import com.project.upbit_clone.global.exception.BusinessException;
 import com.project.upbit_clone.global.exception.ErrorCode;
 import com.project.upbit_clone.user.domain.model.User;
@@ -64,6 +65,18 @@ public class Wallet extends BaseEntity {
         if (user == null || asset == null) {
             throw new BusinessException(ErrorCode.INVALID_WALLET_INPUT);
         }
+    }
+
+    // 사용 가능한 잔고를 잠금 잔고로 이동시킨다.
+    public void lock(BigDecimal amount) {
+        BigDecimal lockAmount = new PositiveAmount(amount).value();
+
+        if (this.availableBalance.compareTo(lockAmount) < 0) {
+            throw new BusinessException(ErrorCode.INSUFFICIENT_AVAILABLE_BALANCE);
+        }
+
+        this.availableBalance = this.availableBalance.subtract(lockAmount);
+        this.lockedBalance = this.lockedBalance.add(lockAmount);
     }
 
 }

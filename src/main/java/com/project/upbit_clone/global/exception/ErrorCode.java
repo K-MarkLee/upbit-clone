@@ -11,9 +11,12 @@ public enum ErrorCode {
     //wallet
     INVALID_WALLET_INPUT("G001", "유효하지 않은 지갑 입력입니다.", HttpStatus.BAD_REQUEST),
     QUOTE_WALLET_NOT_FOUND("G002", "Quote 지갑을 찾을 수 없습니다." , HttpStatus.NOT_FOUND),
+    INSUFFICIENT_AVAILABLE_BALANCE("G003", "가용 잔고가 부족합니다.", HttpStatus.BAD_REQUEST),
+    BASE_WALLET_NOT_FOUND("G004", "Base 지갑을 찾을 수 없습니다." , HttpStatus.NOT_FOUND),
 
     //asset
     INVALID_ASSET_INPUT("F001", "유효하지 않은 자산 입력입니다.", HttpStatus.BAD_REQUEST),
+    INVALID_ASSET_DECIMALS("F002", "자산의 Decimals 값이 유효하지 않습니다." , HttpStatus.INTERNAL_SERVER_ERROR),
 
     //ledger
     INVALID_LEDGER_INPUT("E001", "유효하지 않은 원장 입력입니다.", HttpStatus.BAD_REQUEST),
@@ -27,6 +30,7 @@ public enum ErrorCode {
     INVALID_MARKET_BID_INPUT("D005", "MARKET-BID 주문 입력이 유효하지 않습니다.", HttpStatus.BAD_REQUEST),
     INVALID_MARKET_ASK_INPUT("D006", "MARKET-ASK 주문 입력이 유효하지 않습니다.", HttpStatus.BAD_REQUEST),
     MISSING_REQUIRED_VALUE("D007","주문에 필요한 필수값이 누락되었습니다.", HttpStatus.BAD_REQUEST),
+    LOCK_AMOUNT_TOO_LOW("D008", "락 계산 금액이 자산 최소 단위보다 작습니다." , HttpStatus.BAD_REQUEST),
 
     //market
     DIFFERENT_ASSET_REQUIRED("C001", "서로 다른 자산이어야 합니다.", HttpStatus.BAD_REQUEST),
