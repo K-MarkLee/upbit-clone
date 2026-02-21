@@ -1,8 +1,7 @@
 spring:
   datasource:
     driver-class-name: org.h2.Driver
-    url: jdbc:h2:mem:~/ServerApplication
-    username: sa
+    url: jdbc:h2:mem:upbit_clone_test;MODE=MySQL
     password:
   jpa:
     hibernate:

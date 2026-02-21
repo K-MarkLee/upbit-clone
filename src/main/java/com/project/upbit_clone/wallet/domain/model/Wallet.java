@@ -79,4 +79,35 @@ public class Wallet extends BaseEntity {
         this.lockedBalance = this.lockedBalance.add(lockAmount);
     }
 
+    // 잠금 잔고를 사용 가능한 잔고로 이동시킨다.
+    public void unlock(BigDecimal amount) {
+        BigDecimal unlockAmount = new PositiveAmount(amount).value();
+
+        if (this.lockedBalance.compareTo(unlockAmount) < 0) {
+            throw new BusinessException(ErrorCode.INSUFFICIENT_LOCKED_BALANCE);
+        }
+
+        this.availableBalance = this.availableBalance.add(unlockAmount);
+        this.lockedBalance = this.lockedBalance.subtract(unlockAmount);
+    }
+
+    public void increaseAvailable(BigDecimal amount) {
+        BigDecimal value = new PositiveAmount(amount).value();
+        this.availableBalance = this.availableBalance.add(value);
+    }
+
+    // 잠금 잔고만 감소시킨다. (체결 정산용)
+    public void decreaseLocked(BigDecimal amount) {
+        BigDecimal value = new PositiveAmount(amount).value();
+
+        if (this.lockedBalance.compareTo(value) < 0) {
+            throw new BusinessException(ErrorCode.INSUFFICIENT_LOCKED_BALANCE);
+        }
+
+        this.lockedBalance = this.lockedBalance.subtract(value);
+    }
+
+
+
+
 }

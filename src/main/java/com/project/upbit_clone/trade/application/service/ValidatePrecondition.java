@@ -30,14 +30,16 @@ public class ValidatePrecondition {
     @Transactional(readOnly = true)
     public Optional<Order> validateOrderPreconditions(OrderOrchestrator.PlaceOrderCommand command) {
 
-        // 커맨드 null / blank 검증
-        validateCommand(command);
+        // 멱등성 키 최소 검증 후, 멱등성 히트를 먼저 확인한다.
+        validateIdempotencyInput(command);
+        Optional<Order> existingOrder = findExistingOrder(command.userId(), command.clientOrderId());
+        if (existingOrder.isPresent()) {
+            return existingOrder;
+        }
 
-        // 조회 및 검증
-        validateActiveUser(command.userId());
-        validateActiveMarket(command.marketId());
-
-        return findExistingOrder(command.userId(), command.clientOrderId());
+        // 신규 주문 생성 경로에서만 사전조건을 검증한다.
+        validateCreatePreconditions(command);
+        return Optional.empty();
     }
 
     // 주문을 요청한 사용자를 조회하고, 주문이 가능한 상태인지 검증한다.
@@ -65,16 +67,24 @@ public class ValidatePrecondition {
         return orderRepository.findByUserIdAndClientOrderId(userId, clientOrderId);
     }
 
-    // 사전조건 커맨드의 필수값 null / blank값을 검증한다.
-    private static void validateCommand(OrderOrchestrator.PlaceOrderCommand command) {
+    // 멱등성 조회를 위해 필요한 최소 입력을 검증한다. (최소 값)
+    private static void validateIdempotencyInput(OrderOrchestrator.PlaceOrderCommand command) {
         if (command == null
                 || command.userId() == null
-                || command.marketId() == null
-                || command.side() == null
                 || command.clientOrderId() == null
                 || command.clientOrderId().isBlank()) {
-            throw new BusinessException(ErrorCode.MISSING_REQUIRED_VALUE);
+            throw new BusinessException(ErrorCode.MISSING_ORDER_REQUIRED_VALUE);
         }
+    }
+
+    // 신규 주문 생성 경로에서 필요한 사전조건을 검증한다.
+    private void validateCreatePreconditions(OrderOrchestrator.PlaceOrderCommand command) {
+        if (command.marketId() == null || command.side() == null) {
+            throw new BusinessException(ErrorCode.MISSING_ORDER_REQUIRED_VALUE);
+        }
+
+        validateActiveUser(command.userId());
+        validateActiveMarket(command.marketId());
     }
 
 }

@@ -117,7 +117,7 @@ public class Order extends BaseEntity {
     }
 
 
-    /*************검증 및 정책 *************/
+    /************* 검증, 정책 및 메서드 *************/
 
     // 주문 정책 검증
     private static void validateCreatePolicy(CreateCommand command) {
@@ -301,5 +301,44 @@ public class Order extends BaseEntity {
         }
     }
 
+    // 체결 수량 적용
+    public void applyExecutedQuantity(BigDecimal executedQuantity, BigDecimal executedQuoteAmount) {
+        // OPEN 상태 검증
+        if (this.status != OrderStatus.OPEN) {
+            throw new BusinessException(ErrorCode.ORDER_NOT_OPEN);
+        }
+
+        // 입력값 검증 ( null / 1이상 )
+        if (executedQuantity == null || executedQuoteAmount == null
+                || executedQuantity.compareTo(BigDecimal.ZERO) <= 0
+                || executedQuoteAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException(ErrorCode.INVALID_TRADE_INPUT);
+        }
+        this.executedQuantity = this.executedQuantity.add(executedQuantity);
+        this.executedQuoteAmount = this.executedQuoteAmount.add(executedQuoteAmount);
+
+        // 상태 open -> filled 변경.
+        if (isFilledNow()) {
+            this.status = OrderStatus.FILLED;
+            this.cancelReason = null;
+        }
+    }
+
+    // 취소 이유 수정
+    public void cancel(String reason) {
+        if (this.status != OrderStatus.OPEN) {
+            return;
+        }
+        this.status = OrderStatus.CANCELED;
+        this.cancelReason = (reason == null || reason.isBlank()) ? "Order Canceled" : reason;
+    }
+
+    // 체결 금액 혹은 갯수가 0개 인 경우 검증. (거래 최종 완료)
+    private boolean isFilledNow() {
+        if (this.orderType == OrderType.MARKET && this.orderSide == OrderSide.BID) {
+            return this.executedQuoteAmount.compareTo(this.quoteAmount) >= 0;
+        }
+        return this.executedQuantity.compareTo(this.quantity) >= 0;
+    }
 
 }

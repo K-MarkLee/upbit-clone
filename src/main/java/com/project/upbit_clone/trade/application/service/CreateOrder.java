@@ -1,5 +1,6 @@
 package com.project.upbit_clone.trade.application.service;
 
+import com.project.upbit_clone.global.domain.vo.EnumStatus;
 import com.project.upbit_clone.global.exception.BusinessException;
 import com.project.upbit_clone.global.exception.ErrorCode;
 import com.project.upbit_clone.trade.domain.model.Market;
@@ -42,9 +43,9 @@ public class CreateOrder {
     @Transactional
     public Order createOrder(OrderOrchestrator.PlaceOrderCommand command) {
 
-        // validate에서 user/market 존재 및 상태는 이미 검증됨.
         User user = userRepository.getReferenceById(command.userId());
         Market market = marketRepository.getReferenceById(command.marketId());
+        validateUserAndMarketStatus(user, market);
 
         Order order = Order.create(new Order.CreateCommand(
                 market,
@@ -81,6 +82,16 @@ public class CreateOrder {
         ));
 
         return savedOrder;
+    }
+
+    // write 트랜잭션에서 사용자/마켓 상태를 재검증한다.
+    private static void validateUserAndMarketStatus(User user, Market market) {
+        if (user.getStatus() != EnumStatus.ACTIVE) {
+            throw new BusinessException(ErrorCode.NOT_ALLOWED_USER_STATUS);
+        }
+        if (market.getStatus() != EnumStatus.ACTIVE) {
+            throw new BusinessException(ErrorCode.NOT_ALLOWED_MARKET_STATUS);
+        }
     }
 
     // 주문 방향에 따라 락 대상 지갑(quote/base)을 조회한다.
