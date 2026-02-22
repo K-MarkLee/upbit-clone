@@ -227,6 +227,7 @@ public class Order extends BaseEntity {
         }
         validatePositive(command.price(), ErrorCode.INVALID_LIMIT_BID_INPUT);
         validatePositive(command.quantity(), ErrorCode.INVALID_LIMIT_BID_INPUT);
+        validateScale(command.quantity(), baseScale(command.market()), ErrorCode.INVALID_LIMIT_BID_INPUT);
     }
 
     /*
@@ -244,6 +245,7 @@ public class Order extends BaseEntity {
         }
         validatePositive(command.price(), ErrorCode.INVALID_LIMIT_ASK_INPUT);
         validatePositive(command.quantity(), ErrorCode.INVALID_LIMIT_ASK_INPUT);
+        validateScale(command.quantity(), baseScale(command.market()), ErrorCode.INVALID_LIMIT_ASK_INPUT);
     }
 
     /*
@@ -260,6 +262,7 @@ public class Order extends BaseEntity {
             throw new BusinessException(ErrorCode.INVALID_MARKET_BID_INPUT);
         }
         validatePositive(command.quoteAmount(), ErrorCode.INVALID_MARKET_BID_INPUT);
+        validateScale(command.quoteAmount(), quoteScale(command.market()), ErrorCode.INVALID_MARKET_BID_INPUT);
     }
 
     /*
@@ -276,6 +279,7 @@ public class Order extends BaseEntity {
             throw new BusinessException(ErrorCode.INVALID_MARKET_ASK_INPUT);
         }
         validatePositive(command.quantity(), ErrorCode.INVALID_MARKET_ASK_INPUT);
+        validateScale(command.quantity(), baseScale(command.market()), ErrorCode.INVALID_MARKET_ASK_INPUT);
     }
 
     // 주문 입력값 음수 방지
@@ -299,6 +303,37 @@ public class Order extends BaseEntity {
         if (value.compareTo(minOrderQuote) < 0) {
             throw new BusinessException(errorCode);
         }
+    }
+
+    // 주문 입력의 소수점 scale이 자산 decimals를 초과하지 않는지 검증한다.
+    private static void validateScale(BigDecimal value, int allowedScale, ErrorCode errorCode) {
+        if (value == null) {
+            return;
+        }
+
+        int normalizedScale = normalizedScale(value);
+        if (normalizedScale > allowedScale) {
+            throw new BusinessException(errorCode);
+        }
+    }
+
+    private static int baseScale(Market market) {
+        return resolveAssetScale(market.getBaseAsset().getDecimals());
+    }
+
+    private static int quoteScale(Market market) {
+        return resolveAssetScale(market.getQuoteAsset().getDecimals());
+    }
+
+    private static int resolveAssetScale(Byte decimals) {
+        if (decimals == null || decimals < 0) {
+            throw new BusinessException(ErrorCode.INVALID_ASSET_DECIMALS);
+        }
+        return decimals;
+    }
+
+    private static int normalizedScale(BigDecimal value) {
+        return Math.max(value.stripTrailingZeros().scale(), 0);
     }
 
     // 체결 수량 적용

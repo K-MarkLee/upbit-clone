@@ -56,6 +56,10 @@ public class OrderOrchestrator {
     // OPEN 주문은 매칭을 재시도하고, 항상 최신 상태로 재조회해서 반환한다.
     private Order retryMatchingAndReload(Order order) {
         if (order.getStatus() == OrderStatus.OPEN) {
+            validatePrecondition.validateActiveUserAndMarket(
+                    order.getUser().getId(),
+                    order.getMarket().getId()
+            );
             matchingService.match(order.getId());
         }
         return reloadOrder(order.getId());

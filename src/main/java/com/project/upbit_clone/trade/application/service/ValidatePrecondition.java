@@ -83,8 +83,14 @@ public class ValidatePrecondition {
             throw new BusinessException(ErrorCode.MISSING_ORDER_REQUIRED_VALUE);
         }
 
-        validateActiveUser(command.userId());
-        validateActiveMarket(command.marketId());
+        validateActiveUserAndMarket(command.userId(), command.marketId());
+    }
+
+    // 사용자/시장 ACTIVE 상태를 공용 검증한다.
+    @Transactional(readOnly = true)
+    public void validateActiveUserAndMarket(Long userId, Long marketId) {
+        validateActiveUser(userId);
+        validateActiveMarket(marketId);
     }
 
 }
