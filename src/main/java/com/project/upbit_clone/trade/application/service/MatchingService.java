@@ -56,10 +56,8 @@ public class MatchingService {
             // 최적의 maker 가격 찾기. ( 가격 정렬 + 시간 정렬 )
             Optional<Order> makerOptional = findBestMakerOrder(taker);
             if (makerOptional.isEmpty()) {
-                // maker가 없을때, MARKET 거래는 주문을 닫고 이유 반환.
-                if (shouldCancelOnNoMatch(taker)) {
-                    cancelAndUnlock(taker, "IOC_NO_LIQUIDITY");
-                }
+                // maker가 없을때, MARKET/IOC 거래는 주문을 닫고 이유 반환.
+                handleNoMaker(taker);
                 return;
             }
             Order maker = makerOptional.get();
@@ -70,10 +68,7 @@ public class MatchingService {
             }
 
             // 가격 검증 ( 최적 가격에 거래가능한지 )
-            if (!isPriceCrossed(taker, maker)) {
-                if (shouldCancelOnNoMatch(taker)) {
-                    cancelAndUnlock(taker, "PRICE_NOT_MATCHED");
-                }
+            if (shouldStopForPriceNotCrossed(taker, maker)) {
                 return;
             }
 
@@ -87,6 +82,24 @@ public class MatchingService {
             taker = reloadTaker(taker.getId()).orElse(taker);
 
         }
+    }
+
+    // maker가 없으면 taker 정책에 따라 취소/언락한다.
+    private void handleNoMaker(Order taker) {
+        if (shouldCancelOnNoMatch(taker)) {
+            cancelAndUnlock(taker, "IOC_NO_LIQUIDITY");
+        }
+    }
+
+    // 가격 미충족이면 taker 정책에 따라 취소/언락하고 매칭 루프를 종료한다.
+    private boolean shouldStopForPriceNotCrossed(Order taker, Order maker) {
+        if (isPriceCrossed(taker, maker)) {
+            return false;
+        }
+        if (shouldCancelOnNoMatch(taker)) {
+            cancelAndUnlock(taker, "PRICE_NOT_MATCHED");
+        }
+        return true;
     }
 
     // taker를 조회하고 OPEN 상태인지 확인한다.
@@ -257,7 +270,7 @@ public class MatchingService {
 
         // 체결 불가시 처리
         if (matchAmount.isZero()) {
-            if (isMakerDust(maker)) {
+            if (isMakerDust(maker) || isMakerQuoteDust(maker)) {
                 cancelAndUnlock(maker, CANCEL_REASON_BOOK_DUST_REMAINDER);
                 return true;
             }
@@ -272,7 +285,7 @@ public class MatchingService {
         Order sellOrder = (taker.getOrderSide() == OrderSide.ASK) ? taker : maker;
 
         // 거래 체결
-        // TODO : feerate계산 미구현
+        // TODO : fee rate계산 미구현
         Trade trade = tradeRepository.save(Trade.create(new Trade.CreateCommand(
                 taker.getMarket(),
                 buyOrder,
@@ -305,6 +318,14 @@ public class MatchingService {
         BigDecimal makerRemainingQty = remainingQuantity(maker);
         BigDecimal normalizedQty = makerRemainingQty.setScale(baseScale, RoundingMode.DOWN);
         return normalizedQty.compareTo(BigDecimal.ZERO) <= 0;
+    }
+
+    // maker 전체 잔여를 체결해도 quote 정밀도 기준 0이면 오더북에서 제거한다.
+    private boolean isMakerQuoteDust(Order maker) {
+        int quoteScale = maker.getMarket().getQuoteAsset().getDecimals();
+        BigDecimal makerRemainingQty = remainingQuantity(maker);
+        BigDecimal makerQuote = makerRemainingQty.multiply(maker.getPrice()).setScale(quoteScale, RoundingMode.DOWN);
+        return makerQuote.compareTo(BigDecimal.ZERO) <= 0;
     }
 
     // BID 주문이 FILLED 로 닫힐 때 잔여 락을 반환한다.
