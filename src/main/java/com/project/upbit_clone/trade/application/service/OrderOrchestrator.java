@@ -21,7 +21,7 @@ public class OrderOrchestrator {
 
     private final ValidatePrecondition validatePrecondition;
     private final CreateOrder createOrder;
-    private final MatchingService matchingService;
+    private final MatchingRetryService matchingRetryService;
     private final OrderRepository orderRepository;
 
     public Order placeOrder(PlaceOrderCommand command) {
@@ -49,7 +49,7 @@ public class OrderOrchestrator {
         }
 
         // 매칭 엔진
-        matchingService.match(createdOrder.getId());
+        matchingRetryService.matchWithRetry(createdOrder.getId());
         return reloadOrder(createdOrder.getId());
     }
 
@@ -60,11 +60,10 @@ public class OrderOrchestrator {
                     order.getUser().getId(),
                     order.getMarket().getId()
             );
-            matchingService.match(order.getId());
+            matchingRetryService.matchWithRetry(order.getId());
         }
         return reloadOrder(order.getId());
     }
-
     private Order reloadOrder(Long orderId) {
         return orderRepository.findById(orderId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));

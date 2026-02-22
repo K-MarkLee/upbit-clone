@@ -274,6 +274,10 @@ public class MatchingService {
                 cancelAndUnlock(maker, CANCEL_REASON_BOOK_DUST_REMAINDER);
                 return true;
             }
+            if (isTakerDust(taker, maker)) {
+                cancelAndUnlock(taker, CANCEL_REASON_BOOK_DUST_REMAINDER);
+                return false;
+            }
             if (shouldCancelOnNoMatch(taker)) {
                 cancelAndUnlock(taker, CANCEL_REASON_IOC_DUST_REMAINDER);
             }
@@ -326,6 +330,25 @@ public class MatchingService {
         BigDecimal makerRemainingQty = remainingQuantity(maker);
         BigDecimal makerQuote = makerRemainingQty.multiply(maker.getPrice()).setScale(quoteScale, RoundingMode.DOWN);
         return makerQuote.compareTo(BigDecimal.ZERO) <= 0;
+    }
+
+    // zero-match 시 taker 잔여가 정밀도 기준 체결 불가능하면 주문을 정리한다.
+    private boolean isTakerDust(Order taker, Order maker) {
+        int baseScale = taker.getMarket().getBaseAsset().getDecimals();
+        BigDecimal takerRemainingQty = remainingQuantity(taker);
+        BigDecimal normalizedQty = takerRemainingQty.setScale(baseScale, RoundingMode.DOWN);
+        if (normalizedQty.compareTo(BigDecimal.ZERO) <= 0) {
+            return true;
+        }
+
+        if (taker.getOrderType() != OrderType.LIMIT) {
+            return false;
+        }
+
+        int quoteScale = taker.getMarket().getQuoteAsset().getDecimals();
+        BigDecimal priceForQuoteCheck = maker.getPrice();
+        BigDecimal takerQuote = normalizedQty.multiply(priceForQuoteCheck).setScale(quoteScale, RoundingMode.DOWN);
+        return takerQuote.compareTo(BigDecimal.ZERO) <= 0;
     }
 
     // BID 주문이 FILLED 로 닫힐 때 잔여 락을 반환한다.
