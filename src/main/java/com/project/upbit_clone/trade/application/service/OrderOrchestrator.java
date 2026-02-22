@@ -1,5 +1,7 @@
 package com.project.upbit_clone.trade.application.service;
 
+import com.project.upbit_clone.global.exception.BusinessException;
+import com.project.upbit_clone.global.exception.ErrorCode;
 import com.project.upbit_clone.trade.domain.model.Order;
 import com.project.upbit_clone.trade.domain.repository.OrderRepository;
 import com.project.upbit_clone.trade.domain.vo.OrderSide;
@@ -27,9 +29,7 @@ public class OrderOrchestrator {
         // 주문전 사전정보 검증
         Optional<Order> existingOrder = validatePrecondition.validateOrderPreconditions(command);
         if (existingOrder.isPresent()) {
-            Order foundOrder = existingOrder.get();
-            retryMatchingIfOpen(foundOrder);
-            return foundOrder;
+            return retryMatchingAndReload(existingOrder.get());
         }
 
         // 주문 생성 및 유니크 충돌시 재조회후 반환
@@ -43,23 +43,27 @@ public class OrderOrchestrator {
                     command.clientOrderId()
             );
             if (duplicatedOrder.isPresent()) {
-                Order foundOrder = duplicatedOrder.get();
-                retryMatchingIfOpen(foundOrder);
-                return foundOrder;
+                return retryMatchingAndReload(duplicatedOrder.get());
             }
             throw exception;
         }
 
         // 매칭 엔진
         matchingService.match(createdOrder.getId());
-        return createdOrder;
+        return reloadOrder(createdOrder.getId());
     }
 
-    // 멱등성/유니크 충돌 복구 경로에서 OPEN 주문이면 매칭을 재시도한다.
-    private void retryMatchingIfOpen(Order order) {
+    // OPEN 주문은 매칭을 재시도하고, 항상 최신 상태로 재조회해서 반환한다.
+    private Order retryMatchingAndReload(Order order) {
         if (order.getStatus() == OrderStatus.OPEN) {
             matchingService.match(order.getId());
         }
+        return reloadOrder(order.getId());
+    }
+
+    private Order reloadOrder(Long orderId) {
+        return orderRepository.findById(orderId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
     }
 
     public record PlaceOrderCommand(

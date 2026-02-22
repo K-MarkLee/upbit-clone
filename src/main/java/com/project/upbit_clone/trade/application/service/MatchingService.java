@@ -64,6 +64,11 @@ public class MatchingService {
             }
             Order maker = makerOptional.get();
 
+            // maker가격이 정상적인지 검증.
+            if (!isValidMakerPrice(maker)) {
+                continue;
+            }
+
             // 가격 검증 ( 최적 가격에 거래가능한지 )
             if (!isPriceCrossed(taker, maker)) {
                 if (shouldCancelOnNoMatch(taker)) {
@@ -86,8 +91,7 @@ public class MatchingService {
 
     // taker를 조회하고 OPEN 상태인지 확인한다.
     private Optional<Order> loadOpenTakerOrder(Long takerOrderId) {
-        return orderRepository.findById(takerOrderId)
-                .filter(this::isOpen);
+        return orderRepository.findByIdAndStatus(takerOrderId, OrderStatus.OPEN);
     }
 
     // 주문 상태가 OPEN인지 확인한다.
@@ -102,22 +106,42 @@ public class MatchingService {
 
         // BID taker -> ASK maker(최저가/선주문 우선)
         if (taker.getOrderSide() == OrderSide.BID) {
-            return orderRepository.findFirstByMarketIdAndStatusAndOrderSideAndUserIdNot(
+            return orderRepository.findFirstByMarketIdAndStatusAndOrderSideAndOrderTypeAndPriceIsNotNullAndUserIdNot(
                     marketId,
                     OrderStatus.OPEN,
                     OrderSide.ASK,
+                    OrderType.LIMIT,
                     takerUserId,
                     OrderRepository.asksort
             );
         }
 
         // ASK taker -> BID maker(최고가/선주문 우선)
-        return orderRepository.findFirstByMarketIdAndStatusAndOrderSideAndUserIdNot(
+        return orderRepository.findFirstByMarketIdAndStatusAndOrderSideAndOrderTypeAndPriceIsNotNullAndUserIdNot(
                 marketId,
                 OrderStatus.OPEN,
                 OrderSide.BID,
+                OrderType.LIMIT,
                 takerUserId,
                 OrderRepository.bidsort
+        );
+    }
+
+    // maker 가격이 null 인지 검증. 루프 꺠지지않게.
+    private boolean isValidMakerPrice(Order maker) {
+        if (maker.getPrice() != null) {
+            return true;
+        }
+
+        // MARKET maker는 정책상 선택되면 안되며, 발견 시 즉시 취소/언락한다.
+        if (maker.getOrderType() == OrderType.MARKET) {
+            cancelAndUnlock(maker, "INVALID_MAKER_PRICE");
+            return false;
+        }
+
+        throw new BusinessException(
+                ErrorCode.INTERNAL_SERVER_ERROR,
+                "Invalid maker state: LIMIT order price is null"
         );
     }
 
