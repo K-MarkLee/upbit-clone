@@ -37,6 +37,7 @@ public class MatchingService {
     private final TradeRepository tradeRepository;
 
     private static final String CANCEL_REASON_IOC_DUST_REMAINDER = "IOC_DUST_REMAINDER";
+    private static final String CANCEL_REASON_BOOK_DUST_REMAINDER = "BOOK_DUST_REMAINDER";
 
     @Transactional
     public void match(Long takerOrderId) {
@@ -72,8 +73,8 @@ public class MatchingService {
             }
 
             // 한 번의 매칭을 반영한다. (한건의 거래 마다 기록 - 자산 갯수 단위가 아닌 거래단위)
-            boolean matched = executeOneMatch(taker, maker);
-            if (!matched) {
+            boolean shouldContinue = executeOneMatch(taker, maker);
+            if (!shouldContinue) {
                 return;
             }
 
@@ -170,20 +171,20 @@ public class MatchingService {
     }
 
     // 남아있는(반환해야하는) 락 계산 ( 주문 값 - 체결 값 )
-    private BigDecimal calculateRemainderLock(Order taker) {
+    private BigDecimal calculateRemainderLock(Order order) {
         // ASK : 주문 수량 - 체결 수량
-        if (taker.getOrderSide() == OrderSide.ASK) {
-            return nonNegative(taker.getQuantity().subtract(taker.getExecutedQuantity()));
+        if (order.getOrderSide() == OrderSide.ASK) {
+            return nonNegative(order.getQuantity().subtract(order.getExecutedQuantity()));
         }
 
         // MARKET - BID : 주문 금액 - 체결 금액
-        if (taker.getOrderType() == OrderType.MARKET) {
-            return nonNegative(taker.getQuoteAmount().subtract(taker.getExecutedQuoteAmount()));
+        if (order.getOrderType() == OrderType.MARKET) {
+            return nonNegative(order.getQuoteAmount().subtract(order.getExecutedQuoteAmount()));
         }
 
         // LIMIT - BID : 초기 락 - 체결 금액
-        BigDecimal initialLock = taker.getPrice().multiply(taker.getQuantity());
-        return nonNegative(initialLock.subtract(taker.getExecutedQuoteAmount()));
+        BigDecimal initialLock = order.getPrice().multiply(order.getQuantity());
+        return nonNegative(initialLock.subtract(order.getExecutedQuoteAmount()));
     }
 
     // 주문 방향에 따라 락 대상 지갑(quote/base)을 조회한다.
@@ -230,9 +231,12 @@ public class MatchingService {
         // 거래 가능 수량, 거래 가능 금액 그리고 maker의 가격을 호출.
         MatchAmount matchAmount = calculateMatchAmount(taker, maker);
 
-        // 체결 불가시
-        // IOC 면 취소 아니면 체결 실패.
+        // 체결 불가시 처리
         if (matchAmount.isZero()) {
+            if (isMakerDust(maker)) {
+                cancelAndUnlock(maker, CANCEL_REASON_BOOK_DUST_REMAINDER);
+                return true;
+            }
             if (shouldCancelOnNoMatch(taker)) {
                 cancelAndUnlock(taker, CANCEL_REASON_IOC_DUST_REMAINDER);
             }
@@ -264,7 +268,50 @@ public class MatchingService {
         // 주문 업데이트 ( 체결 금액 추가 )
         buyOrder.applyExecutedQuantity(matchAmount.quantity(), matchAmount.quoteAmount());
         sellOrder.applyExecutedQuantity(matchAmount.quantity(), matchAmount.quoteAmount());
+
+        // filled 시 잔여금액 반환 및 원장 처리.
+        unlockFilledBidRemainingQuote(buyOrder);
+        unlockFilledBidRemainingQuote(sellOrder);
         return true;
+    }
+
+    // maker 잔여수량이 decimal기준 거래 불가능한 dust 인지 확인한다.
+    private boolean isMakerDust(Order maker) {
+        int baseScale = maker.getMarket().getBaseAsset().getDecimals();
+        BigDecimal makerRemainingQty = remainingQuantity(maker);
+        BigDecimal normalizedQty = makerRemainingQty.setScale(baseScale, RoundingMode.DOWN);
+        return normalizedQty.compareTo(BigDecimal.ZERO) <= 0;
+    }
+
+    // BID 주문이 FILLED 로 닫힐 때 잔여 락을 반환한다.
+    private void unlockFilledBidRemainingQuote(Order order) {
+        if (order.getOrderSide() != OrderSide.BID || order.getStatus() != OrderStatus.FILLED) {
+            return;
+        }
+
+        BigDecimal remainderLock = calculateRemainderLock(order);
+        if (remainderLock.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+
+        Wallet lockWallet = loadLockWallet(order);
+        int decimals = lockWallet.getAsset().getDecimals();
+        BigDecimal unlockAmount = remainderLock.setScale(decimals, RoundingMode.DOWN);
+        if (unlockAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+
+        BigDecimal availableBefore = lockWallet.getAvailableBalance();
+        BigDecimal lockedBefore = lockWallet.getLockedBalance();
+        lockWallet.unlock(unlockAmount);
+
+        ledgerRepository.save(createOrderUnlockLedger(
+                order,
+                lockWallet,
+                unlockAmount,
+                availableBefore,
+                lockedBefore
+        ));
     }
 
     // 체결 가격을 계산한다.
