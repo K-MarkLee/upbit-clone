@@ -8,15 +8,21 @@ import org.springframework.http.HttpStatus;
 @Getter
 @AllArgsConstructor(access = AccessLevel.PROTECTED)
 public enum ErrorCode {
+    //common
+    VALIDATION_ERROR("H001", "요청값이 유효하지 않습니다.", HttpStatus.BAD_REQUEST),
+    INVALID_PARAMETER_TYPE("H002", "요청 파라미터 타입이 올바르지 않습니다.", HttpStatus.BAD_REQUEST),
+    INTERNAL_SERVER_ERROR("H003", "서버 내부 오류가 발생했습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
+
     //wallet
     INVALID_WALLET_INPUT("G001", "유효하지 않은 지갑 입력입니다.", HttpStatus.BAD_REQUEST),
-    QUOTE_WALLET_NOT_FOUND("G002", "Quote 지갑을 찾을 수 없습니다." , HttpStatus.NOT_FOUND),
+    QUOTE_WALLET_NOT_FOUND("G002", "Quote 지갑을 찾을 수 없습니다." , HttpStatus.BAD_REQUEST),
     INSUFFICIENT_AVAILABLE_BALANCE("G003", "가용 잔고가 부족합니다.", HttpStatus.BAD_REQUEST),
-    BASE_WALLET_NOT_FOUND("G004", "Base 지갑을 찾을 수 없습니다." , HttpStatus.NOT_FOUND),
+    BASE_WALLET_NOT_FOUND("G004", "Base 지갑을 찾을 수 없습니다." , HttpStatus.BAD_REQUEST),
+    INSUFFICIENT_LOCKED_BALANCE("G005", "잠금 잔고가 부족합니다." , HttpStatus.BAD_REQUEST),
 
     //asset
     INVALID_ASSET_INPUT("F001", "유효하지 않은 자산 입력입니다.", HttpStatus.BAD_REQUEST),
-    INVALID_ASSET_DECIMALS("F002", "자산의 Decimals 값이 유효하지 않습니다." , HttpStatus.INTERNAL_SERVER_ERROR),
+    INVALID_ASSET_DECIMALS("F002", "자산의 메타데이터가 비정상입니다." , HttpStatus.INTERNAL_SERVER_ERROR),
 
     //ledger
     INVALID_LEDGER_INPUT("E001", "유효하지 않은 원장 입력입니다.", HttpStatus.BAD_REQUEST),
@@ -29,8 +35,12 @@ public enum ErrorCode {
     INVALID_LIMIT_ASK_INPUT("D004", "LIMIT-ASK 주문 입력이 유효하지 않습니다.", HttpStatus.BAD_REQUEST),
     INVALID_MARKET_BID_INPUT("D005", "MARKET-BID 주문 입력이 유효하지 않습니다.", HttpStatus.BAD_REQUEST),
     INVALID_MARKET_ASK_INPUT("D006", "MARKET-ASK 주문 입력이 유효하지 않습니다.", HttpStatus.BAD_REQUEST),
-    MISSING_REQUIRED_VALUE("D007","주문에 필요한 필수값이 누락되었습니다.", HttpStatus.BAD_REQUEST),
+    MISSING_ORDER_REQUIRED_VALUE("D007","주문에 필요한 필수값이 누락되었습니다.", HttpStatus.BAD_REQUEST),
     LOCK_AMOUNT_TOO_LOW("D008", "락 계산 금액이 자산 최소 단위보다 작습니다." , HttpStatus.BAD_REQUEST),
+    INVALID_ORDER_SIDE("D009", "유효하지 않은 주문 방향입니다", HttpStatus.BAD_REQUEST),
+    ORDER_NOT_OPEN("D0010", "현재 상태에서는 주문을 처리할 수 없습니다.", HttpStatus.BAD_REQUEST),
+    ORDER_NOT_FOUND("D011", "일치하는 주문을 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
+    ORDER_ACCESS_DENIED("D012", "주문 접근 권한이 없습니다.", HttpStatus.FORBIDDEN),
 
     //market
     DIFFERENT_ASSET_REQUIRED("C001", "서로 다른 자산이어야 합니다.", HttpStatus.BAD_REQUEST),
@@ -42,9 +52,8 @@ public enum ErrorCode {
     SELF_TRADE_NOT_ALLOWED("B001", "판매자와 구매자는 같을 수 없습니다.", HttpStatus.BAD_REQUEST),
     TRADE_MARKET_NOT_MATCHED("B002", "거래 마켓과 주문 마켓은 같아야 합니다.", HttpStatus.BAD_REQUEST),
     TRADE_PRICE_MUST_BE_MAKER_PRICE("B003", "체결 가격은 메이커 주문 가격이어야 합니다.", HttpStatus.BAD_REQUEST),
-    INVALID_TRADE_INPUT("B004", "유효하지 않은 거래 마켓 입력입니다.", HttpStatus.BAD_REQUEST),
+    INVALID_TRADE_INPUT("B004", "유효하지 않은 거래 입력입니다.", HttpStatus.BAD_REQUEST),
     ORDER_SIDE_NOT_MATCHED("B005", "거래 방향이 일치해야 합니다.", HttpStatus.BAD_REQUEST),
-    INVALID_ORDER_SIDE("B006", "유효하지 않은 거래 방향입니다", HttpStatus.BAD_REQUEST),
 
 
     //user
