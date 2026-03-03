@@ -4,14 +4,20 @@ import com.project.upbit_clone.global.presentation.response.ApiResponse;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindException;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -76,8 +82,34 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(errorCode.getHttpStatus()).body(body);
     }
 
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingServletRequestParameterException(
+            MissingServletRequestParameterException exception
+    ) {
+        String message = "'" + exception.getParameterName() + "' 요청 파라미터가 필요합니다.";
+        return frameworkError(HttpStatus.BAD_REQUEST, message);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleHttpMessageNotReadableException(
+            HttpMessageNotReadableException exception
+    ) {
+        return frameworkError(HttpStatus.BAD_REQUEST, "요청 본문(JSON) 형식이 올바르지 않습니다.");
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ApiResponse<Void>> handleResponseStatusException(ResponseStatusException exception) {
+        return frameworkError(exception.getStatusCode(), exception.getReason());
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleException(Exception exception) {
+        if (exception instanceof ErrorResponse errorResponse) {
+            errorResponse.getBody();
+            String detail = errorResponse.getBody().getDetail();
+            return frameworkError(errorResponse.getStatusCode(), detail);
+        }
+
         log.error("Unhandled exception", exception);
         ErrorCode errorCode = ErrorCode.INTERNAL_SERVER_ERROR;
         ApiResponse<Void> body = ApiResponse.failure(errorCode.getCode(), errorCode.getMessage());
@@ -92,5 +124,16 @@ public class GlobalExceptionHandler {
                 errors
         );
         return ResponseEntity.status(errorCode.getHttpStatus()).body(body);
+    }
+
+    private ResponseEntity<ApiResponse<Void>> frameworkError(HttpStatusCode statusCode, String message) {
+        ErrorCode errorCode = statusCode.is4xxClientError()
+                ? ErrorCode.VALIDATION_ERROR
+                : ErrorCode.INTERNAL_SERVER_ERROR;
+        String resolvedMessage = (message == null || message.isBlank())
+                ? errorCode.getMessage()
+                : message;
+        ApiResponse<Void> body = ApiResponse.failure(errorCode.getCode(), resolvedMessage);
+        return ResponseEntity.status(statusCode).body(body);
     }
 }
