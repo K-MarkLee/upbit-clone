@@ -10,7 +10,6 @@ import com.project.upbit_clone.trade.infrastructure.persistence.vo.CommandType;
 import com.project.upbit_clone.user.domain.model.User;
 import com.project.upbit_clone.user.domain.repository.UserRepository;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.util.Optional;
@@ -25,13 +24,13 @@ public class CancelOrder extends AbstractOrderIngress<CancelOrder.Command> {
             UserRepository userRepository,
             MarketRepository marketRepository,
             JsonMapper jsonMapper,
-            IdempotencyHitService idempotencyHitService
+            IdempotencyHitService idempotencyHitService,
+            CommandLogAppendService commandLogAppendService
     ) {
-        super(commandLogRepository, userRepository, marketRepository, jsonMapper, idempotencyHitService);
+        super(userRepository, marketRepository, jsonMapper, idempotencyHitService, commandLogAppendService);
         this.commandLogRepository = commandLogRepository;
     }
 
-    @Transactional
     public CommandAck handle(Command command) {
         return handleInternal(command);
     }

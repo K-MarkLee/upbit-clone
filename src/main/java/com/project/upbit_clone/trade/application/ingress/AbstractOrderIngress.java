@@ -6,7 +6,6 @@ import com.project.upbit_clone.global.exception.ErrorCode;
 import com.project.upbit_clone.trade.domain.model.Market;
 import com.project.upbit_clone.trade.domain.repository.MarketRepository;
 import com.project.upbit_clone.trade.infrastructure.persistence.model.CommandLog;
-import com.project.upbit_clone.trade.infrastructure.persistence.repository.CommandLogRepository;
 import com.project.upbit_clone.user.domain.model.User;
 import com.project.upbit_clone.user.domain.repository.UserRepository;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -18,24 +17,24 @@ import java.util.UUID;
 
 abstract class AbstractOrderIngress<C extends OrderCommand> {
 
-    private final CommandLogRepository commandLogRepository;
     private final UserRepository userRepository;
     private final MarketRepository marketRepository;
     private final JsonMapper jsonMapper;
     private final IdempotencyHitService idempotencyHitService;
+    private final CommandLogAppendService commandLogAppendService;
 
     protected AbstractOrderIngress(
-            CommandLogRepository commandLogRepository,
             UserRepository userRepository,
             MarketRepository marketRepository,
             JsonMapper jsonMapper,
-            IdempotencyHitService idempotencyHitService
+            IdempotencyHitService idempotencyHitService,
+            CommandLogAppendService commandLogAppendService
     ) {
-        this.commandLogRepository = commandLogRepository;
         this.userRepository = userRepository;
         this.marketRepository = marketRepository;
         this.jsonMapper = jsonMapper;
         this.idempotencyHitService = idempotencyHitService;
+        this.commandLogAppendService = commandLogAppendService;
     }
 
     protected CommandAck handleInternal(C command) {
@@ -56,7 +55,7 @@ abstract class AbstractOrderIngress<C extends OrderCommand> {
 
         CommandLog commandLog = createCommandLog(command);
         try {
-            CommandLog saved = commandLogRepository.save(commandLog);
+            CommandLog saved = commandLogAppendService.append(commandLog);
             return CommandAck.accepted(saved, false);
         } catch (DataIntegrityViolationException exception) {
             Optional<CommandLog> recovered = idempotencyHitService.findInNewTransaction(

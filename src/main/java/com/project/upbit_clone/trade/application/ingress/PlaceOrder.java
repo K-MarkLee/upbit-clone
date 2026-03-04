@@ -6,12 +6,10 @@ import com.project.upbit_clone.trade.domain.repository.MarketRepository;
 import com.project.upbit_clone.trade.domain.vo.OrderSide;
 import com.project.upbit_clone.trade.domain.vo.OrderType;
 import com.project.upbit_clone.trade.domain.vo.TimeInForce;
-import com.project.upbit_clone.trade.infrastructure.persistence.repository.CommandLogRepository;
 import com.project.upbit_clone.trade.infrastructure.persistence.vo.CommandType;
 import com.project.upbit_clone.user.domain.model.User;
 import com.project.upbit_clone.user.domain.repository.UserRepository;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.math.BigDecimal;
@@ -20,16 +18,15 @@ import java.math.BigDecimal;
 public class PlaceOrder extends AbstractOrderIngress<PlaceOrder.Command> {
 
     public PlaceOrder(
-            CommandLogRepository commandLogRepository,
             UserRepository userRepository,
             MarketRepository marketRepository,
             JsonMapper jsonMapper,
-            IdempotencyHitService idempotencyHitService
+            IdempotencyHitService idempotencyHitService,
+            CommandLogAppendService commandLogAppendService
     ) {
-        super(commandLogRepository, userRepository, marketRepository, jsonMapper, idempotencyHitService);
+        super(userRepository, marketRepository, jsonMapper, idempotencyHitService, commandLogAppendService);
     }
 
-    @Transactional
     public CommandAck handle(Command command) {
         return handleInternal(command);
     }
