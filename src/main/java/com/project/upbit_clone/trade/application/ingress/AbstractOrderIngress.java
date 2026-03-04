@@ -7,7 +7,6 @@ import com.project.upbit_clone.trade.domain.model.Market;
 import com.project.upbit_clone.trade.domain.repository.MarketRepository;
 import com.project.upbit_clone.trade.infrastructure.persistence.model.CommandLog;
 import com.project.upbit_clone.trade.infrastructure.persistence.repository.CommandLogRepository;
-import com.project.upbit_clone.trade.infrastructure.persistence.vo.CommandType;
 import com.project.upbit_clone.user.domain.model.User;
 import com.project.upbit_clone.user.domain.repository.UserRepository;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -23,23 +22,30 @@ abstract class AbstractOrderIngress<C extends OrderCommand> {
     private final UserRepository userRepository;
     private final MarketRepository marketRepository;
     private final JsonMapper jsonMapper;
+    private final IdempotencyHitService idempotencyHitService;
 
     protected AbstractOrderIngress(
             CommandLogRepository commandLogRepository,
             UserRepository userRepository,
             MarketRepository marketRepository,
-            JsonMapper jsonMapper
+            JsonMapper jsonMapper,
+            IdempotencyHitService idempotencyHitService
     ) {
         this.commandLogRepository = commandLogRepository;
         this.userRepository = userRepository;
         this.marketRepository = marketRepository;
         this.jsonMapper = jsonMapper;
+        this.idempotencyHitService = idempotencyHitService;
     }
 
     protected CommandAck handleInternal(C command) {
         validateInput(command);
 
-        Optional<CommandLog> hit = findIdempotencyHit(command.userId(), command.clientOrderId(), command.commandType());
+        Optional<CommandLog> hit = idempotencyHitService.find(
+                command.userId(),
+                command.clientOrderId(),
+                command.commandType()
+        );
         if (hit.isPresent()) {
             return CommandAck.accepted(hit.get(), true);
         }
@@ -53,7 +59,7 @@ abstract class AbstractOrderIngress<C extends OrderCommand> {
             CommandLog saved = commandLogRepository.save(commandLog);
             return CommandAck.accepted(saved, false);
         } catch (DataIntegrityViolationException exception) {
-            Optional<CommandLog> recovered = findIdempotencyHit(
+            Optional<CommandLog> recovered = idempotencyHitService.findInNewTransaction(
                     command.userId(),
                     command.clientOrderId(),
                     command.commandType()
@@ -77,12 +83,6 @@ abstract class AbstractOrderIngress<C extends OrderCommand> {
                 || command.clientOrderId().isBlank()) {
             throw new BusinessException(ErrorCode.MISSING_ORDER_REQUIRED_VALUE);
         }
-    }
-
-    // 멱등성 히트
-    private Optional<CommandLog> findIdempotencyHit(Long userId, String clientOrderId, CommandType commandType) {
-        return commandLogRepository
-                .findByUserIdAndClientOrderIdAndCommandType(userId, clientOrderId, commandType);
     }
 
     // 사용자 검증

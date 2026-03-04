@@ -23,9 +23,10 @@ public class PlaceOrder extends AbstractOrderIngress<PlaceOrder.Command> {
             CommandLogRepository commandLogRepository,
             UserRepository userRepository,
             MarketRepository marketRepository,
-            JsonMapper jsonMapper
+            JsonMapper jsonMapper,
+            IdempotencyHitService idempotencyHitService
     ) {
-        super(commandLogRepository, userRepository, marketRepository, jsonMapper);
+        super(commandLogRepository, userRepository, marketRepository, jsonMapper, idempotencyHitService);
     }
 
     @Transactional

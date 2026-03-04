@@ -5,6 +5,7 @@ import com.project.upbit_clone.trade.domain.vo.OrderType;
 import com.project.upbit_clone.trade.domain.vo.TimeInForce;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 
@@ -16,7 +17,9 @@ public final class OrderRequest {
     public record Place(
             @NotNull Long userId,
             @NotNull Long marketId,
-            @NotBlank String clientOrderId,
+            @NotBlank
+            @Size(max = 150, message = "client order id는 150자 보다 클 수 없습니다.")
+            String clientOrderId,
             @NotNull OrderSide orderSide,
             @NotNull OrderType orderType,
             TimeInForce timeInForce,
@@ -29,7 +32,9 @@ public final class OrderRequest {
     public record Cancel(
             @NotNull Long userId,
             @NotNull Long marketId,
-            @NotBlank String clientOrderId,
+            @NotBlank
+            @Size(max = 150, message = "client order id는 150자 보다 클 수 없습니다.")
+            String clientOrderId,
             String cancelReason
     ) {
     }

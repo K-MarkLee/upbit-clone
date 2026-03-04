@@ -24,9 +24,10 @@ public class CancelOrder extends AbstractOrderIngress<CancelOrder.Command> {
             CommandLogRepository commandLogRepository,
             UserRepository userRepository,
             MarketRepository marketRepository,
-            JsonMapper jsonMapper
+            JsonMapper jsonMapper,
+            IdempotencyHitService idempotencyHitService
     ) {
-        super(commandLogRepository, userRepository, marketRepository, jsonMapper);
+        super(commandLogRepository, userRepository, marketRepository, jsonMapper, idempotencyHitService);
         this.commandLogRepository = commandLogRepository;
     }
 
