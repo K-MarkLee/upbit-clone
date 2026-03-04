@@ -1,5 +1,7 @@
 package com.project.upbit_clone.trade.infrastructure.persistence.model;
 
+import com.project.upbit_clone.global.exception.BusinessException;
+import com.project.upbit_clone.global.exception.ErrorCode;
 import com.project.upbit_clone.trade.infrastructure.persistence.vo.EventType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -20,7 +22,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
-import java.util.Objects;
 
 @Entity
 @Getter
@@ -43,11 +44,7 @@ public class EventLog {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(
-            name = "command_log_id",
-            nullable = false,
-            foreignKey = @ForeignKey(name = "fk_event_log_command_log")
-    )
+    @JoinColumn(name = "command_log_id", nullable = false)
     private CommandLog commandLog;
 
     @Column(name = "event_id", nullable = false, length = 64)
@@ -70,16 +67,17 @@ public class EventLog {
     private LocalDateTime createdAt;
 
     public static EventLog create(CreateCommand command) {
+        validateCreateCommand(command);
         return new EventLog(command);
     }
 
     private EventLog(CreateCommand command) {
-        this.commandLog = Objects.requireNonNull(command.commandLog(), "commandLog");
-        this.eventId = requireText(command.eventId(), "eventId");
-        this.eventType = Objects.requireNonNull(command.eventType(), "eventType");
-        this.marketId = Objects.requireNonNull(command.marketId(), "marketId");
+        this.commandLog = command.commandLog();
+        this.eventId = command.eventId();
+        this.eventType = command.eventType();
+        this.marketId = command.marketId();
         this.orderId = command.orderId();
-        this.payload = requireText(command.payload(), "payload");
+        this.payload = command.payload();
     }
 
     public record CreateCommand(
@@ -92,10 +90,16 @@ public class EventLog {
     ) {
     }
 
-    private static String requireText(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
+    private static void validateCreateCommand(CreateCommand command) {
+        if (command == null
+                || command.commandLog() == null
+                || command.eventId() == null
+                || command.eventId().isBlank()
+                || command.eventType() == null
+                || command.marketId() == null
+                || command.payload() == null
+                || command.payload().isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_EVENT_LOG_INPUT);
         }
-        return value;
     }
 }

@@ -1,5 +1,7 @@
 package com.project.upbit_clone.trade.infrastructure.persistence.model;
 
+import com.project.upbit_clone.global.exception.BusinessException;
+import com.project.upbit_clone.global.exception.ErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
@@ -9,7 +11,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
-import java.util.Objects;
 
 @Entity
 @Getter
@@ -27,25 +28,26 @@ public class ConsumerOffset {
     private LocalDateTime updatedAt;
 
     public static ConsumerOffset create(ConsumerOffsetId id, Long lastOffset) {
+        validateCreateInput(id, lastOffset);
         return new ConsumerOffset(id, lastOffset);
     }
 
     private ConsumerOffset(ConsumerOffsetId id, Long lastOffset) {
-        this.id = Objects.requireNonNull(id, "id");
-        this.lastOffset = normalizeNonNegative(lastOffset);
+        this.id = id;
+        this.lastOffset = validateOffset(lastOffset);
     }
 
-    public void updateLastOffset(Long lastOffset) {
-        this.lastOffset = normalizeNonNegative(lastOffset);
+    public static void validateCreateInput(ConsumerOffsetId id, Long lastOffset) {
+        if (id == null || lastOffset == null) {
+            throw new BusinessException(ErrorCode.INVALID_CONSUMER_OFFSET_INPUT);
+        }
     }
 
-    private static long normalizeNonNegative(Long value) {
-        if (value == null) {
-            return 0L;
+    private Long validateOffset(Long offset) {
+        if (offset < 0) {
+            throw new BusinessException(ErrorCode.NEGATIVE_OFFSET_NOT_ALLOWED);
         }
-        if (value < 0L) {
-            throw new IllegalArgumentException("lastOffset must not be negative");
-        }
-        return value;
+        return offset;
     }
+
 }
