@@ -3,10 +3,8 @@ package com.project.upbit_clone.trade.application.ingress;
 import com.project.upbit_clone.global.exception.BusinessException;
 import com.project.upbit_clone.global.exception.ErrorCode;
 import com.project.upbit_clone.trade.domain.model.Market;
-import com.project.upbit_clone.trade.domain.model.Order;
 import com.project.upbit_clone.trade.domain.repository.MarketRepository;
-import com.project.upbit_clone.trade.domain.repository.OrderRepository;
-import com.project.upbit_clone.trade.domain.vo.OrderStatus;
+import com.project.upbit_clone.trade.infrastructure.persistence.model.CommandLog;
 import com.project.upbit_clone.trade.infrastructure.persistence.repository.CommandLogRepository;
 import com.project.upbit_clone.trade.infrastructure.persistence.vo.CommandType;
 import com.project.upbit_clone.user.domain.model.User;
@@ -15,20 +13,21 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.util.Optional;
+
 @Service
 public class CancelOrder extends AbstractOrderIngress<CancelOrder.Command> {
 
-    private final OrderRepository orderRepository;
+    private final CommandLogRepository commandLogRepository;
 
     public CancelOrder(
             CommandLogRepository commandLogRepository,
             UserRepository userRepository,
             MarketRepository marketRepository,
-            OrderRepository orderRepository,
             JsonMapper jsonMapper
     ) {
         super(commandLogRepository, userRepository, marketRepository, jsonMapper);
-        this.orderRepository = orderRepository;
+        this.commandLogRepository = commandLogRepository;
     }
 
     @Transactional
@@ -50,15 +49,17 @@ public class CancelOrder extends AbstractOrderIngress<CancelOrder.Command> {
 
     @Override
     protected void validateBusiness(Command command, Market market, User user) {
-        Order order = orderRepository
-                .findByUser_IdAndMarket_IdAndClientOrderId(
+        Optional<CommandLog> placeCommand = commandLogRepository
+                .findByUserIdAndClientOrderIdAndCommandType(
                         command.userId(),
-                        command.marketId(),
-                        command.clientOrderId()
-                )
-                .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
-        if (order.getStatus() != OrderStatus.OPEN) {
-            throw new BusinessException(ErrorCode.ORDER_NOT_OPEN);
+                        command.clientOrderId(),
+                        CommandType.PLACE_ORDER
+                );
+        if (placeCommand.isEmpty()) {
+            throw new BusinessException(ErrorCode.ORDER_NOT_FOUND);
+        }
+        if (!command.marketId().equals(placeCommand.get().getMarketId())) {
+            throw new BusinessException(ErrorCode.ORDER_NOT_FOUND);
         }
     }
 }
