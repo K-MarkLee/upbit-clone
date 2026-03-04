@@ -1,5 +1,8 @@
 package com.project.upbit_clone.trade.infrastructure.persistence.model;
 
+import com.project.upbit_clone.global.domain.vo.NonNegativeAmount;
+import com.project.upbit_clone.global.exception.BusinessException;
+import com.project.upbit_clone.global.exception.ErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
@@ -10,7 +13,6 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.Objects;
 
 @Entity
 @Getter
@@ -35,31 +37,26 @@ public class OrderBookProjection {
             BigDecimal totalQty,
             Integer orderCount
     ) {
+        validateCreateInput(id, totalQty, orderCount);
         return new OrderBookProjection(id, totalQty, orderCount);
     }
 
     private OrderBookProjection(OrderBookProjectionId id, BigDecimal totalQty, Integer orderCount) {
-        this.id = Objects.requireNonNull(id, "id");
-        this.totalQty = normalizeQty(totalQty);
-        this.orderCount = normalizeOrderCount(orderCount);
+        this.id = id;
+        this.totalQty = new NonNegativeAmount(totalQty).value();
+        this.orderCount = validateOrderCount(orderCount);
     }
 
-    public void updateLevel(BigDecimal totalQty, Integer orderCount) {
-        this.totalQty = normalizeQty(totalQty);
-        this.orderCount = normalizeOrderCount(orderCount);
-    }
-
-    private static BigDecimal normalizeQty(BigDecimal value) {
-        if (value == null || value.compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalArgumentException("totalQty must not be negative");
-        }
-        return value;
-    }
-
-    private static int normalizeOrderCount(Integer value) {
+    private static int validateOrderCount(Integer value) {
         if (value == null || value < 0) {
-            throw new IllegalArgumentException("orderCount must not be negative");
+            throw new BusinessException(ErrorCode.NEGATIVE_ORDER_COUNT_NOT_ALLOWED);
         }
         return value;
+    }
+
+    public static void validateCreateInput(OrderBookProjectionId id, BigDecimal totalQty, Integer orderCount) {
+        if (id == null || totalQty == null || orderCount == null) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER_BOOK_PROJECTION_INPUT);
+        }
     }
 }

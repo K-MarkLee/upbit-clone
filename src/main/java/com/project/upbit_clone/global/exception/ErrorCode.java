@@ -8,6 +8,20 @@ import org.springframework.http.HttpStatus;
 @Getter
 @AllArgsConstructor(access = AccessLevel.PROTECTED)
 public enum ErrorCode {
+    // order book projection
+    INVALID_ORDER_BOOK_PROJECTION_INPUT("L01", "유효하지 않은 오더북 프로젝션 입력입니다.", HttpStatus.BAD_REQUEST),
+    NEGATIVE_ORDER_COUNT_NOT_ALLOWED("L02", "주문 카운트는 0 미만일 수 없습니다.", HttpStatus.BAD_REQUEST),
+
+    // event log
+    INVALID_EVENT_LOG_INPUT("K01", "유효하지 않은 이벤트 로그 입력입니다.", HttpStatus.BAD_REQUEST),
+
+    // consumer offset
+    INVALID_CONSUMER_OFFSET_INPUT("J01", "유효하지 않은 소비자 오프셋 입력입니다.", HttpStatus.BAD_REQUEST),
+    NEGATIVE_OFFSET_NOT_ALLOWED("J02", "오프셋은 0 미만일 수 없습니다.", HttpStatus.BAD_REQUEST),
+
+    //command log
+    INVALID_COMMAND_LOG_INPUT("I01", "유효하지 않은 커맨드 로그 입력입니다.", HttpStatus.BAD_REQUEST),
+
     //common
     VALIDATION_ERROR("H001", "요청값이 유효하지 않습니다.", HttpStatus.BAD_REQUEST),
     INVALID_PARAMETER_TYPE("H002", "요청 파라미터 타입이 올바르지 않습니다.", HttpStatus.BAD_REQUEST),

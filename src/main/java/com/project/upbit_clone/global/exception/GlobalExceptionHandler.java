@@ -102,6 +102,11 @@ public class GlobalExceptionHandler {
         return frameworkError(exception.getStatusCode(), exception.getReason());
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalArgumentException(IllegalArgumentException exception) {
+        return frameworkError(HttpStatus.BAD_REQUEST, exception.getMessage());
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleException(Exception exception) {
         if (exception instanceof ErrorResponse errorResponse) {

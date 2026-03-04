@@ -1,5 +1,7 @@
 package com.project.upbit_clone.trade.infrastructure.persistence.model;
 
+import com.project.upbit_clone.global.exception.BusinessException;
+import com.project.upbit_clone.global.exception.ErrorCode;
 import com.project.upbit_clone.trade.infrastructure.persistence.vo.CommandType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -16,7 +18,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
-import java.util.Objects;
 
 @Entity
 @Getter
@@ -65,16 +66,18 @@ public class CommandLog {
     private LocalDateTime createdAt;
 
     public static CommandLog create(CreateCommand command) {
+        validateCreateCommand(command);
+
         return new CommandLog(command);
     }
 
     private CommandLog(CreateCommand command) {
-        this.commandId = requireText(command.commandId(), "commandId");
-        this.commandType = Objects.requireNonNull(command.commandType(), "commandType");
-        this.marketId = Objects.requireNonNull(command.marketId(), "marketId");
+        this.commandId = command.commandId();
+        this.commandType = command.commandType();
+        this.marketId = command.marketId();
         this.userId = command.userId();
         this.clientOrderId = command.clientOrderId();
-        this.payload = requireText(command.payload(), "payload");
+        this.payload = command.payload();
     }
 
     public record CreateCommand(
@@ -87,10 +90,15 @@ public class CommandLog {
     ) {
     }
 
-    private static String requireText(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
+    public static void validateCreateCommand(CreateCommand command) {
+        if (command == null
+                || command.commandId() == null
+                || command.commandId().isBlank()
+                || command.commandType() == null
+                || command.marketId() == null
+                || command.payload() == null
+                || command.payload().isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_COMMAND_LOG_INPUT);
         }
-        return value;
     }
 }
