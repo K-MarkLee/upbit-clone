@@ -22,23 +22,27 @@ abstract class AbstractOrderIngress<C extends OrderCommand> {
     private final JsonMapper jsonMapper;
     private final IdempotencyHitService idempotencyHitService;
     private final CommandLogAppendService commandLogAppendService;
+    private final OrderCommandHashService orderCommandHashService;
 
     protected AbstractOrderIngress(
             UserRepository userRepository,
             MarketRepository marketRepository,
             JsonMapper jsonMapper,
             IdempotencyHitService idempotencyHitService,
-            CommandLogAppendService commandLogAppendService
+            CommandLogAppendService commandLogAppendService,
+            OrderCommandHashService orderCommandHashService
     ) {
         this.userRepository = userRepository;
         this.marketRepository = marketRepository;
         this.jsonMapper = jsonMapper;
         this.idempotencyHitService = idempotencyHitService;
         this.commandLogAppendService = commandLogAppendService;
+        this.orderCommandHashService = orderCommandHashService;
     }
 
     protected CommandAck handleInternal(C command) {
         validateInput(command);
+        String requestHash = orderCommandHashService.hash(command);
 
         Optional<CommandLog> hit = idempotencyHitService.find(
                 command.userId(),
@@ -46,14 +50,14 @@ abstract class AbstractOrderIngress<C extends OrderCommand> {
                 command.commandType()
         );
         if (hit.isPresent()) {
-            return CommandAck.accepted(hit.get(), true);
+            return resolveIdempotencyHit(hit.get(), requestHash);
         }
 
         User user = validateAndGetUser(command.userId());
         Market market = validateAndGetMarket(command.marketId());
         validateBusiness(command, market, user);
 
-        CommandLog commandLog = createCommandLog(command);
+        CommandLog commandLog = createCommandLog(command, requestHash);
         try {
             CommandLog saved = commandLogAppendService.append(commandLog);
             return CommandAck.accepted(saved, false);
@@ -66,7 +70,7 @@ abstract class AbstractOrderIngress<C extends OrderCommand> {
             if (recovered.isEmpty()) {
                 throw exception;
             }
-            return CommandAck.accepted(recovered.get(), true);
+            return resolveIdempotencyHit(recovered.get(), requestHash);
         }
     }
 
@@ -105,7 +109,7 @@ abstract class AbstractOrderIngress<C extends OrderCommand> {
     }
 
     // 커맨드 로그 생성 (주문 생성 : CREATE, CANCEL)
-    private CommandLog createCommandLog(OrderCommand command) {
+    private CommandLog createCommandLog(OrderCommand command, String requestHash) {
         String commandId = UUID.randomUUID().toString();
         return CommandLog.create(new CommandLog.CreateCommand(
                 commandId,
@@ -113,8 +117,17 @@ abstract class AbstractOrderIngress<C extends OrderCommand> {
                 command.marketId(),
                 command.userId(),
                 command.clientOrderId(),
-                toPayload(command)
+                toPayload(command),
+                requestHash
         ));
+    }
+
+    // 멱등성 히트
+    private CommandAck resolveIdempotencyHit(CommandLog commandLog, String requestHash) {
+        if (!requestHash.equals(commandLog.getRequestHash())) {
+            throw new BusinessException(ErrorCode.IDEMPOTENCY_CONFLICT);
+        }
+        return CommandAck.accepted(commandLog, true);
     }
 
     // 원본 스냅샷

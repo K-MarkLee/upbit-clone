@@ -21,6 +21,7 @@ public enum ErrorCode {
 
     //command log
     INVALID_COMMAND_LOG_INPUT("I01", "유효하지 않은 커맨드 로그 입력입니다.", HttpStatus.BAD_REQUEST),
+    INVALID_COMMAND_TYPE("I02", "지원하지 않는 커맨드 타입입니다.", HttpStatus.BAD_REQUEST),
 
     //common
     VALIDATION_ERROR("H001", "요청값이 유효하지 않습니다.", HttpStatus.BAD_REQUEST),
@@ -55,6 +56,7 @@ public enum ErrorCode {
     ORDER_NOT_OPEN("D0010", "현재 상태에서는 주문을 처리할 수 없습니다.", HttpStatus.BAD_REQUEST),
     ORDER_NOT_FOUND("D011", "일치하는 주문을 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
     ORDER_ACCESS_DENIED("D012", "주문 접근 권한이 없습니다.", HttpStatus.FORBIDDEN),
+    IDEMPOTENCY_CONFLICT("D013", "동일 멱등 키로 서로 다른 요청은 허용되지 않습니다.", HttpStatus.CONFLICT),
 
     //market
     DIFFERENT_ASSET_REQUIRED("C001", "서로 다른 자산이어야 합니다.", HttpStatus.BAD_REQUEST),

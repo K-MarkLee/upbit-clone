@@ -22,9 +22,17 @@ public class PlaceOrder extends AbstractOrderIngress<PlaceOrder.Command> {
             MarketRepository marketRepository,
             JsonMapper jsonMapper,
             IdempotencyHitService idempotencyHitService,
-            CommandLogAppendService commandLogAppendService
+            CommandLogAppendService commandLogAppendService,
+            OrderCommandHashService orderCommandHashService
     ) {
-        super(userRepository, marketRepository, jsonMapper, idempotencyHitService, commandLogAppendService);
+        super(
+                userRepository,
+                marketRepository,
+                jsonMapper,
+                idempotencyHitService,
+                commandLogAppendService,
+                orderCommandHashService
+        );
     }
 
     public CommandAck handle(Command command) {

@@ -62,6 +62,9 @@ public class CommandLog {
     @Column(name = "payload", nullable = false, columnDefinition = "json")
     private String payload;
 
+    @Column(name = "request_hash", length = 64, nullable = false)
+    private String requestHash;
+
     @Column(name = "created_at", insertable = false, updatable = false, nullable = false)
     private LocalDateTime createdAt;
 
@@ -78,6 +81,7 @@ public class CommandLog {
         this.userId = command.userId();
         this.clientOrderId = command.clientOrderId();
         this.payload = command.payload();
+        this.requestHash = command.requestHash();
     }
 
     public record CreateCommand(
@@ -86,7 +90,8 @@ public class CommandLog {
             Long marketId,
             Long userId,
             String clientOrderId,
-            String payload
+            String payload,
+            String requestHash
     ) {
     }
 
@@ -97,7 +102,10 @@ public class CommandLog {
                 || command.commandType() == null
                 || command.marketId() == null
                 || command.payload() == null
-                || command.payload().isBlank()) {
+                || command.payload().isBlank()
+                || command.requestHash() == null
+                || command.requestHash().isBlank()
+            ) {
             throw new BusinessException(ErrorCode.INVALID_COMMAND_LOG_INPUT);
         }
     }
