@@ -96,7 +96,7 @@ abstract class AbstractOrderIngress<C extends OrderCommand> {
 
     // 시장 검증
     private Market validateAndGetMarket(Long marketId) {
-        Market market = marketRepository.findById(marketId)
+        Market market = marketRepository.findWithAssetsById(marketId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MARKET_NOT_FOUND));
         if (market.getStatus() != EnumStatus.ACTIVE) {
             throw new BusinessException(ErrorCode.NOT_ALLOWED_MARKET_STATUS);
