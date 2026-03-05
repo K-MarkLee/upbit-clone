@@ -35,10 +35,15 @@ public class OrderCommandHashService {
                     + "|quoteAmount=" + normalizeDecimal(place.quoteAmount());
         }
         if (command instanceof CancelOrder.Command cancel) {
-            return "marketId=" + cancel.marketId();
+            return "marketId=" + cancel.marketId()
+                    + "|cancelReason=" + normalizeText(cancel.cancelReason());
         }
 
         throw new BusinessException(ErrorCode.INVALID_COMMAND_TYPE);
+    }
+
+    private String normalizeText(String value) {
+        return value == null ? "null" : value.strip();
     }
 
     private String normalizeEnum(Enum<?> value) {
