@@ -43,7 +43,7 @@ public class OrderCommandHashService {
     }
 
     private String normalizeText(String value) {
-        return value == null ? "null" : value.strip();
+        return (value == null || value.isBlank()) ? "Order Canceled" : value.strip();
     }
 
     private String normalizeEnum(Enum<?> value) {
