@@ -335,7 +335,7 @@ class OrderTest {
                         market, user, "client-order-1", OrderSide.ASK, OrderType.LIMIT, null, new BigDecimal("10000"), BigDecimal.ZERO, null
                 )),
                 Arguments.of("price is negative", createCommand(
-                        market, user, "client-order-1", OrderSide.ASK, OrderType.LIMIT, null, BigDecimal.ZERO, new BigDecimal("-1"), null
+                        market, user, "client-order-1", OrderSide.ASK, OrderType.LIMIT, null, BigDecimal.ZERO, new BigDecimal("1"), null
                 )),
                 Arguments.of("quantity is negative", createCommand(
                         market, user, "client-order-1", OrderSide.ASK, OrderType.LIMIT, null, new BigDecimal("10000"), new BigDecimal("-1"), null
@@ -516,6 +516,256 @@ class OrderTest {
         assertThatThrownBy(() -> Order.create(command))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_ORDER_INPUT);
+    }
+
+    @Test
+    @DisplayName("Negative : LIMIT-BID 수량 scale이 base decimals를 초과하면 BusinessException을 반환한다.")
+    void create_limit_bid_order_with_quantity_scale_overflow() {
+        // given
+        Order.CreateCommand command = createCommand(
+                market, user, clientOrderId, OrderSide.BID, OrderType.LIMIT,
+                null, price, new BigDecimal("1.123456789"), null
+        );
+
+        // when & then
+        assertThatThrownBy(() -> Order.create(command))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_LIMIT_BID_INPUT);
+    }
+
+    @Test
+    @DisplayName("Negative : LIMIT-ASK 수량 scale이 base decimals를 초과하면 BusinessException을 반환한다.")
+    void create_limit_ask_order_with_quantity_scale_overflow() {
+        // given
+        Order.CreateCommand command = createCommand(
+                market, user, clientOrderId, OrderSide.ASK, OrderType.LIMIT,
+                null, price, new BigDecimal("1.123456789"), null
+        );
+
+        // when & then
+        assertThatThrownBy(() -> Order.create(command))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_LIMIT_ASK_INPUT);
+    }
+
+    @Test
+    @DisplayName("Negative : MARKET-BID quoteAmount scale이 quote decimals를 초과하면 BusinessException을 반환한다.")
+    void create_market_bid_order_with_quote_amount_scale_overflow() {
+        // given
+        Order.CreateCommand command = createCommand(
+                market, user, clientOrderId, OrderSide.BID, OrderType.MARKET,
+                null, null, null, new BigDecimal("10000.123")
+        );
+
+        // when & then
+        assertThatThrownBy(() -> Order.create(command))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_MARKET_BID_INPUT);
+    }
+
+    @Test
+    @DisplayName("Happy : trailing zero가 있는 LIMIT-BID 수량은 허용된다.")
+    void create_limit_bid_order_with_trailing_zero_quantity() {
+        // given
+        Order.CreateCommand command = createCommand(
+                market, user, clientOrderId, OrderSide.BID, OrderType.LIMIT,
+                null, price, new BigDecimal("1.230000000"), null
+        );
+
+        // when
+        Order order = Order.create(command);
+
+        // then
+        assertThat(order).isNotNull();
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.OPEN);
+    }
+
+    @Test
+    @DisplayName("Happy : trailing zero가 있는 MARKET-BID quoteAmount는 허용된다.")
+    void create_market_bid_order_with_trailing_zero_quote_amount() {
+        // given
+        Order.CreateCommand command = createCommand(
+                market, user, clientOrderId, OrderSide.BID, OrderType.MARKET,
+                null, null, null, new BigDecimal("10000.1000")
+        );
+
+        // when
+        Order order = Order.create(command);
+
+        // then
+        assertThat(order).isNotNull();
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.OPEN);
+    }
+
+    @Test
+    @DisplayName("Happy : 부분 체결 시 OPEN 상태를 유지하고 executed 값이 누적된다.")
+    void apply_executed_quantity_partial_fill_keeps_open() {
+        // given
+        Order order = Order.create(createCommand(
+                market, user, clientOrderId, OrderSide.ASK, OrderType.LIMIT,
+                null, price, new BigDecimal("2"), null
+        ));
+
+        // when
+        order.applyExecutedQuantity(BigDecimal.ONE, new BigDecimal("10000"));
+
+        // then
+        assertThat(order.getExecutedQuantity()).isEqualByComparingTo("1");
+        assertThat(order.getExecutedQuoteAmount()).isEqualByComparingTo("10000");
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.OPEN);
+        assertThat(order.getCancelReason()).isNull();
+    }
+
+    @Test
+    @DisplayName("Happy : LIMIT 주문이 전량 체결되면 FILLED 상태로 변경된다.")
+    void apply_executed_quantity_full_fill_changes_to_filled() {
+        // given
+        Order order = Order.create(createCommand(
+                market, user, clientOrderId, OrderSide.ASK, OrderType.LIMIT,
+                null, price, new BigDecimal("2"), null
+        ));
+
+        // when
+        order.applyExecutedQuantity(new BigDecimal("2"), new BigDecimal("20000"));
+
+        // then
+        assertThat(order.getExecutedQuantity()).isEqualByComparingTo("2");
+        assertThat(order.getExecutedQuoteAmount()).isEqualByComparingTo("20000");
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.FILLED);
+        assertThat(order.getCancelReason()).isNull();
+    }
+
+    @Test
+    @DisplayName("Happy : MARKET-BID는 executedQuoteAmount 기준으로 FILLED 상태가 된다.")
+    void apply_executed_quantity_market_bid_uses_executed_quote_amount() {
+        // given
+        Order order = Order.create(createCommand(
+                market, user, clientOrderId, OrderSide.BID, OrderType.MARKET,
+                null, null, null, new BigDecimal("10000")
+        ));
+
+        // when
+        order.applyExecutedQuantity(new BigDecimal("0.5"), new BigDecimal("10000"));
+
+        // then
+        assertThat(order.getExecutedQuantity()).isEqualByComparingTo("0.5");
+        assertThat(order.getExecutedQuoteAmount()).isEqualByComparingTo("10000");
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.FILLED);
+    }
+
+    @Test
+    @DisplayName("Negative : OPEN 상태가 아닌 주문에 체결을 반영하면 BusinessException을 반환한다.")
+    void apply_executed_quantity_on_not_open_order() {
+        // given
+        Order order = Order.create(createCommand(
+                market, user, clientOrderId, OrderSide.BID, OrderType.LIMIT,
+                null, price, BigDecimal.ONE, null
+        ));
+        order.cancel("user cancel");
+        BigDecimal executedQuantity = BigDecimal.ONE;
+        BigDecimal executionPrice = new BigDecimal("10000");
+
+        // when & then
+        assertThatThrownBy(() -> order.applyExecutedQuantity(executedQuantity, executionPrice))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ORDER_NOT_OPEN);
+    }
+
+    @ParameterizedTest(name = "[{index}] {0}")
+    @MethodSource("invalidApplyExecutedQuantityInputs")
+    @DisplayName("Negative : 체결 반영 입력값이 유효하지 않으면 BusinessException을 반환한다.")
+    void apply_executed_quantity_with_invalid_inputs(
+            String caseName,
+            BigDecimal executedQuantity,
+            BigDecimal executedQuoteAmount
+    ) {
+        // given
+        Order order = Order.create(createCommand(
+                market, user, clientOrderId, OrderSide.ASK, OrderType.LIMIT,
+                null, price, new BigDecimal("2"), null
+        ));
+
+        // when & then
+        assertThatThrownBy(() -> order.applyExecutedQuantity(executedQuantity, executedQuoteAmount))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_TRADE_INPUT);
+    }
+
+    private static Stream<Arguments> invalidApplyExecutedQuantityInputs() {
+        return Stream.of(
+                Arguments.of("executedQuantity null", null, BigDecimal.ONE),
+                Arguments.of("executedQuoteAmount null", BigDecimal.ONE, null),
+                Arguments.of("executedQuantity zero", BigDecimal.ZERO, BigDecimal.ONE),
+                Arguments.of("executedQuoteAmount zero", BigDecimal.ONE, BigDecimal.ZERO),
+                Arguments.of("executedQuantity negative", new BigDecimal("-1"), BigDecimal.ONE),
+                Arguments.of("executedQuoteAmount negative", BigDecimal.ONE, new BigDecimal("-1"))
+        );
+    }
+
+    @ParameterizedTest(name = "[{index}] {0}")
+    @MethodSource("cancelOpenOrderInputs")
+    @DisplayName("Happy : OPEN 주문 cancel 시 입력 사유에 따라 취소 사유가 저장된다.")
+    void cancel_open_order_with_reason(
+            String caseName,
+            String reason,
+            String expectedCancelReason
+    ) {
+        // given
+        Order order = Order.create(createCommand(
+                market, user, clientOrderId, OrderSide.ASK, OrderType.LIMIT,
+                null, price, BigDecimal.ONE, null
+        ));
+
+        // when
+        order.cancel(reason);
+
+        // then
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(order.getCancelReason()).isEqualTo(expectedCancelReason);
+    }
+
+    private static Stream<Arguments> cancelOpenOrderInputs() {
+        return Stream.of(
+                Arguments.of("reason null", null, "Order Canceled"),
+                Arguments.of("reason blank", "   ", "Order Canceled"),
+                Arguments.of("reason custom", "USER_REQUEST", "USER_REQUEST")
+        );
+    }
+
+    @Test
+    @DisplayName("Happy : 이미 FILLED 상태인 주문에 cancel을 호출해도 상태는 유지된다.")
+    void cancel_filled_order_is_no_op() {
+        // given
+        Order order = Order.create(createCommand(
+                market, user, clientOrderId, OrderSide.ASK, OrderType.LIMIT,
+                null, price, BigDecimal.ONE, null
+        ));
+        order.applyExecutedQuantity(BigDecimal.ONE, new BigDecimal("10000"));
+
+        // when
+        order.cancel("USER_REQUEST");
+
+        // then
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.FILLED);
+        assertThat(order.getCancelReason()).isNull();
+    }
+
+    @Test
+    @DisplayName("Happy : 이미 CANCELED 상태인 주문에 cancel을 다시 호출해도 기존 사유를 유지한다.")
+    void cancel_canceled_order_is_no_op() {
+        // given
+        Order order = Order.create(createCommand(
+                market, user, clientOrderId, OrderSide.ASK, OrderType.LIMIT,
+                null, price, BigDecimal.ONE, null
+        ));
+        order.cancel("FIRST_REASON");
+
+        // when
+        order.cancel("SECOND_REASON");
+
+        // then
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(order.getCancelReason()).isEqualTo("FIRST_REASON");
     }
 
 

@@ -98,4 +98,31 @@ class AssetTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_ASSET_INPUT);
     }
+
+    @Test
+    @DisplayName("Happy : id가 없으면 symbol(Objects.equals) 기준으로 동일 자산을 판단한다.")
+    void is_same_asset_with_same_symbol() {
+        // given
+        Asset left = Asset.create("BTC", "Bitcoin", (byte) 8, EnumStatus.ACTIVE);
+        Asset right = Asset.create("BTC", "Wrapped Bitcoin", (byte) 8, EnumStatus.ACTIVE);
+
+        // when
+        boolean result = left.isSameAsset(right);
+
+        // then
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    @DisplayName("Negative : 비교 대상이 null이면 false를 반환한다.")
+    void is_same_asset_with_null_other() {
+        // given
+        Asset left = Asset.create("BTC", "Bitcoin", (byte) 8, EnumStatus.ACTIVE);
+
+        // when
+        boolean result = left.isSameAsset(null);
+
+        // then
+        assertThat(result).isFalse();
+    }
 }
