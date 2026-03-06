@@ -335,7 +335,7 @@ class OrderTest {
                         market, user, "client-order-1", OrderSide.ASK, OrderType.LIMIT, null, new BigDecimal("10000"), BigDecimal.ZERO, null
                 )),
                 Arguments.of("price is negative", createCommand(
-                        market, user, "client-order-1", OrderSide.ASK, OrderType.LIMIT, null, BigDecimal.ZERO, new BigDecimal("-1"), null
+                        market, user, "client-order-1", OrderSide.ASK, OrderType.LIMIT, null, BigDecimal.ZERO, new BigDecimal("1"), null
                 )),
                 Arguments.of("quantity is negative", createCommand(
                         market, user, "client-order-1", OrderSide.ASK, OrderType.LIMIT, null, new BigDecimal("10000"), new BigDecimal("-1"), null
