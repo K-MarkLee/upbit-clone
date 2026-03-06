@@ -102,11 +102,90 @@ class WalletTest {
     void lock_with_insufficient_available_balance() {
         // given
         Wallet wallet = Wallet.create(user, asset, new BigDecimal("10"), BigDecimal.ZERO);
+        BigDecimal amount = new BigDecimal("30");
 
         // when & then
-        assertThatThrownBy(() -> wallet.lock(new BigDecimal("30")))
+        assertThatThrownBy(() -> wallet.lock(amount))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INSUFFICIENT_AVAILABLE_BALANCE);
+    }
+
+    @Test
+    @DisplayName("Happy : unlock 호출 시 locked에서 available로 금액이 이동한다.")
+    void unlock_with_sufficient_locked_balance() {
+        // given
+        Wallet wallet = Wallet.create(user, asset, new BigDecimal("70"), new BigDecimal("30"));
+
+        // when
+        wallet.unlock(new BigDecimal("20"));
+
+        // then
+        assertThat(wallet.getAvailableBalance()).isEqualByComparingTo("90");
+        assertThat(wallet.getLockedBalance()).isEqualByComparingTo("10");
+    }
+
+    @Test
+    @DisplayName("Negative : unlock 호출 시 locked가 부족하면 BusinessException을 반환한다.")
+    void unlock_with_insufficient_locked_balance() {
+        // given
+        Wallet wallet = Wallet.create(user, asset, new BigDecimal("70"), new BigDecimal("10"));
+        BigDecimal amount = new BigDecimal("20");
+
+        // when & then
+        assertThatThrownBy(() -> wallet.unlock(amount))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INSUFFICIENT_LOCKED_BALANCE);
+    }
+
+    @Test
+    @DisplayName("Happy : decreaseLocked 호출 시 locked만 감소한다.")
+    void decrease_locked_with_sufficient_locked_balance() {
+        // given
+        Wallet wallet = Wallet.create(user, asset, new BigDecimal("70"), new BigDecimal("30"));
+
+        // when
+        wallet.decreaseLocked(new BigDecimal("20"));
+
+        // then
+        assertThat(wallet.getAvailableBalance()).isEqualByComparingTo("70");
+        assertThat(wallet.getLockedBalance()).isEqualByComparingTo("10");
+    }
+
+    @Test
+    @DisplayName("Negative : decreaseLocked 호출 시 locked가 부족하면 BusinessException을 반환한다.")
+    void decrease_locked_with_insufficient_locked_balance() {
+        // given
+        Wallet wallet = Wallet.create(user, asset, new BigDecimal("70"), new BigDecimal("10"));
+        BigDecimal amount = new BigDecimal("20");
+        // when & then
+        assertThatThrownBy(() -> wallet.decreaseLocked(amount))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INSUFFICIENT_LOCKED_BALANCE);
+    }
+
+    @Test
+    @DisplayName("Happy : increaseAvailable 호출 시 available만 증가한다.")
+    void increase_available() {
+        // given
+        Wallet wallet = Wallet.create(user, asset, new BigDecimal("70"), new BigDecimal("10"));
+
+        // when
+        wallet.increaseAvailable(new BigDecimal("20"));
+
+        // then
+        assertThat(wallet.getAvailableBalance()).isEqualByComparingTo("90");
+        assertThat(wallet.getLockedBalance()).isEqualByComparingTo("10");
+    }
+
+    @Test
+    @DisplayName("Negative : increaseAvailable 호출 시 금액이 0 이하면 IllegalArgumentException을 반환한다.")
+    void increase_available_with_non_positive_amount() {
+        // given
+        Wallet wallet = Wallet.create(user, asset, new BigDecimal("70"), new BigDecimal("10"));
+
+        // when & then
+        assertThatThrownBy(() -> wallet.increaseAvailable(BigDecimal.ZERO))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
 }

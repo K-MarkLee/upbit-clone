@@ -131,6 +131,20 @@ class MarketTest {
 
     }
 
+    @Test
+    @DisplayName("Negative : baseAsset과 quoteAsset이 동일하면 BusinessException을 반환한다.")
+    void create_market_with_same_assets() {
+        // given
+        Market.CreateCommand command = createCommand(
+                baseAsset, baseAsset, marketCode, status, minOrderQuote, tickSize
+        );
+
+        // when & then
+        assertThatThrownBy(() -> Market.create(command))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.DIFFERENT_ASSET_REQUIRED);
+    }
+
     // 커맨드 생성 헬퍼
     private Market.CreateCommand createCommand(
             Asset baseAsset,

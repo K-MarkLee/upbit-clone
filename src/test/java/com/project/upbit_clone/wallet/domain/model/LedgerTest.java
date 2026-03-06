@@ -150,6 +150,24 @@ class LedgerTest {
     }
 
 
+    @Test
+    @DisplayName("Negative : wallet 자산과 ledger 자산이 다르면 BusinessException(ASSET_NOT_MATCHED)을 반환한다.")
+    void create_ledger_with_asset_not_matched() {
+        // given
+        Asset differentAsset = Asset.create("ETH", "Ethereum", (byte) 8, EnumStatus.ACTIVE);
+        Ledger.CreateCommand command = createCommand(
+                wallet, differentAsset, ledgerType, changeType, amount,
+                availableBefore, availableAfter, lockedBefore, lockedAfter,
+                referenceType, referenceId, description, idempotencyKey
+        );
+
+        // when & then
+        assertThatThrownBy(() -> Ledger.create(command))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ASSET_NOT_MATCHED);
+    }
+
+
     // 커맨드 생성 헬퍼
     private Ledger.CreateCommand createCommand(
             Wallet wallet,
@@ -170,4 +188,5 @@ class LedgerTest {
                 wallet, asset, type, changeType, amount, availableBefore, availableAfter, lockedBefore, lockedAfter, referenceType, referenceId, description, idempotencyKey
         );
     }
+
 }

@@ -56,7 +56,7 @@ tasks.named('test') {
 }
 
 def jacocoIncludes = ['com/project/upbit_clone/**']
-def jacocoExcludes = ['**/Q*.*']
+def jacocoExcludes = ['**/Q*.*','**/global*']
 
 jacocoTestReport {
 	reports {

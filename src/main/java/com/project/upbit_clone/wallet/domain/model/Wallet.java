@@ -107,7 +107,4 @@ public class Wallet extends BaseEntity {
         this.lockedBalance = this.lockedBalance.subtract(value);
     }
 
-
-
-
 }

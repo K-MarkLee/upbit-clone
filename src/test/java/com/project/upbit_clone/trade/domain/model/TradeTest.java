@@ -24,8 +24,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @DisplayName("Trade 도메인 테스트")
 class TradeTest {
     private Market market;
-    private User buyUser;
-    private User sellUser;
     private Order buyOrder;
     private Order sellOrder;
 
@@ -33,8 +31,6 @@ class TradeTest {
     void setUp() {
         TradeFixture fixture = fixture();
         market = fixture.market();
-        buyUser = fixture.buyUser();
-        sellUser = fixture.sellUser();
         buyOrder = fixture.buyOrder();
         sellOrder = fixture.sellOrder();
     }
@@ -234,6 +230,68 @@ class TradeTest {
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.TRADE_MARKET_NOT_MATCHED);
     }
 
+    @Test
+    @DisplayName("Happy : trade.market과 order.market이 서로 다른 인스턴스여도 id가 같으면 생성된다.")
+    void create_trade_with_same_market_id_different_instance() {
+        // given
+        setMarketId(market, 1L);
+
+        Asset baseAsset = Asset.create("BTC", "Bitcoin", (byte) 8, EnumStatus.ACTIVE);
+        Asset quoteAsset = Asset.create("KRW", "Korean Won", (byte) 2, EnumStatus.ACTIVE);
+        Market sameIdMarket = Market.create(new Market.CreateCommand(
+                baseAsset,
+                quoteAsset,
+                "KRW-BTC-SAME-ID",
+                EnumStatus.ACTIVE,
+                new BigDecimal("5000"),
+                new BigDecimal("1000")
+        ));
+        setMarketId(sameIdMarket, 1L);
+
+        Trade.CreateCommand command = createCommand(
+                sameIdMarket, buyOrder, sellOrder, OrderSide.ASK,
+                sellOrder.getPrice(), BigDecimal.ONE, new BigDecimal("10000"),
+                null, null, null
+        );
+
+        // when
+        Trade trade = Trade.create(command);
+
+        // then
+        assertThat(trade).isNotNull();
+        assertThat(trade.getMarket()).isEqualTo(sameIdMarket);
+    }
+
+    @Test
+    @DisplayName("Negative : trade.market과 order.market이 서로 다른 인스턴스이고 id도 다르면 BusinessException을 반환한다.")
+    void create_trade_with_different_market_id_different_instance() {
+        // given
+        setMarketId(market, 1L);
+
+        Asset baseAsset = Asset.create("BTC", "Bitcoin", (byte) 8, EnumStatus.ACTIVE);
+        Asset quoteAsset = Asset.create("KRW", "Korean Won", (byte) 2, EnumStatus.ACTIVE);
+        Market differentIdMarket = Market.create(new Market.CreateCommand(
+                baseAsset,
+                quoteAsset,
+                "KRW-BTC-DIFF-ID",
+                EnumStatus.ACTIVE,
+                new BigDecimal("5000"),
+                new BigDecimal("1000")
+        ));
+        setMarketId(differentIdMarket, 2L);
+
+        Trade.CreateCommand command = createCommand(
+                differentIdMarket, buyOrder, sellOrder, OrderSide.ASK,
+                sellOrder.getPrice(), BigDecimal.ONE, new BigDecimal("10000"),
+                null, null, null
+        );
+
+        // when & then
+        assertThatThrownBy(() -> Trade.create(command))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.TRADE_MARKET_NOT_MATCHED);
+    }
+
     @ParameterizedTest(name = "[{index}] {0}")
     @MethodSource("invalidMakerPriceCommands")
     @DisplayName("Negative : 체결가가 maker 주문 가격과 다르면 BusinessException을 반환한다.")
@@ -390,6 +448,17 @@ class TradeTest {
             idField.set(user, userId);
         } catch (NoSuchFieldException | IllegalAccessException e) {
             throw new IllegalStateException("User id 필드 주입 실패", e);
+        }
+    }
+
+    // 마켓 id 헬퍼 (isDifferentMarket의 id 비교 분기 테스트용)
+    private static void setMarketId(Market market, Long marketId) {
+        try {
+            Field idField = Market.class.getDeclaredField("id");
+            idField.setAccessible(true);
+            idField.set(market, marketId);
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            throw new IllegalStateException("Market id 필드 주입 실패", e);
         }
     }
 
