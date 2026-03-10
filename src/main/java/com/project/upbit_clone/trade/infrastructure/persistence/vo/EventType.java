@@ -1,6 +1,7 @@
 package com.project.upbit_clone.trade.infrastructure.persistence.vo;
 
 public enum EventType {
+    ORDER_OPENED,
     TRADE_EXECUTED,
     ORDER_PARTIALLY_FILLED,
     ORDER_FILLED,
