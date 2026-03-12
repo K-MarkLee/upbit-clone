@@ -126,8 +126,11 @@ public class InMemoryOrderBook {
 
     // add 전 엔트리 최소 검증.
     private void validateEntry(BookOrderEntry entry) {
-        if (entry == null) {
+        if (entry == null || entry.getSide() == null || entry.getPrice() == null || entry.getRemainingQty() == null) {
             throw new BusinessException(ErrorCode.INVALID_ORDER_BOOK_INPUT);
+        }
+        if (entry.getRemainingQty().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new EngineException("체결된 entry는 오더북에 추가될 수 없습니다.: " + entry.getOrderId());
         }
         validateSideAndPrice(entry.getSide(), entry.getPrice());
     }

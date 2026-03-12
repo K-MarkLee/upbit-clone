@@ -1,12 +1,16 @@
 package com.project.upbit_clone.trade.application.engine.orderbook;
 
+import com.project.upbit_clone.trade.application.engine.EngineException;
 import com.project.upbit_clone.trade.domain.vo.OrderSide;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DisplayName("InMemoryOrderBook 테스트")
 class InMemoryOrderBookTest {
@@ -245,5 +249,48 @@ class InMemoryOrderBookTest {
         assertThat(orderBook.getLevelSnapshot(OrderSide.BID, new BigDecimal("50000"))).isPresent();
         assertThat(orderBook.getLevelSnapshot(OrderSide.BID, new BigDecimal("50000")).orElseThrow().orderCount())
                 .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("Negative : 전량 체결된 entry는 다시 오더북에 추가할 수 없다.")
+    void reject_readding_filled_entry() {
+        InMemoryOrderBook orderBook = new InMemoryOrderBook();
+        BookOrderEntry entry = BookOrderEntry.create(
+                101L,
+                OrderSide.BID,
+                new BigDecimal("50000"),
+                new BigDecimal("10")
+        );
+
+        orderBook.add(entry);
+        orderBook.applyExecution(
+                OrderSide.BID,
+                new BigDecimal("50000"),
+                new BigDecimal("10")
+        );
+
+        assertThatThrownBy(() -> orderBook.add(entry))
+                .isInstanceOf(EngineException.class)
+                .hasMessageContaining("101");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"-1", "0"})
+    @DisplayName("Negative : 0 이하 체결 수량은 허용하지 않는다.")
+    void reject_non_positive_execution_quantity(String executedQty) {
+        InMemoryOrderBook orderBook = new InMemoryOrderBook();
+        orderBook.add(BookOrderEntry.create(
+                101L,
+                OrderSide.BID,
+                new BigDecimal("50000"),
+                new BigDecimal("10")
+        ));
+
+        BigDecimal price = new BigDecimal("50000");
+        BigDecimal qty = new BigDecimal(executedQty);
+
+        assertThatThrownBy(() -> orderBook.applyExecution(
+                OrderSide.BID, price, qty))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }
