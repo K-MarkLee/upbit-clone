@@ -60,22 +60,20 @@ public class PriceLevel {
         return true;
     }
 
-    // 부분 체결을 적용하고 레벨 집계를 함께 갱신한다.
-    public boolean applyExecution(BookOrderEntry entry, BigDecimal executedQty) {
-        validateEntry(entry);
-
+    // 선두 주문에 부분 체결을 적용하고 레벨 집계를 함께 갱신한다.
+    public boolean applyExecution(BigDecimal executedQty) {
         BigDecimal value = new PositiveAmount(executedQty).value();
-
-        if (!entries.contains(entry)) {
-            throw new EngineException("entry를 찾을 수 없습니다.: " + entry.getOrderId());
+        BookOrderEntry entry = entries.peekFirst();
+        if (entry == null) {
+            throw new EngineException("체결할 선두 주문이 없습니다.");
         }
 
         entry.decreaseRemainingQty(value);
         totalQty = totalQty.subtract(value);
 
         if (entry.isFilled()) {
-            boolean removed = entries.remove(entry);
-            if (!removed) {
+            BookOrderEntry removed = entries.pollFirst();
+            if (removed == null) {
                 throw new EngineException("entry를 제거하는데 실패했습니다.");
             }
             orderCount--;

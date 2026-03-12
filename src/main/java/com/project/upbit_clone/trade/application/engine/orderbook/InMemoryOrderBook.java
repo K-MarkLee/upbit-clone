@@ -90,39 +90,38 @@ public class InMemoryOrderBook {
         return Optional.of(new LevelDelta(entry.getSide(), entry.getPrice(), before, after));
     }
 
-    // 부분 체결을 오더북에 반영하고 before/after delta를 반환한다.
-    public LevelDelta applyExecution(Long orderId, BigDecimal executedQty) {
-        if (orderId == null) {
-            throw new BusinessException(ErrorCode.INVALID_ORDER_BOOK_INPUT);
-        }
+    // 지정한 가격 레벨의 선두 주문에 부분 체결을 반영하고 before/after delta를 반환한다.
+    public LevelDelta applyExecution(OrderSide side, BigDecimal price, BigDecimal executedQty) {
+        validateSideAndPrice(side, price);
 
-        BookOrderEntry entry = orderIndex.get(orderId);
-        if (entry == null) {
-            throw new EngineException("오더북에서 order를 찾을 수 없습니다.: " + orderId);
-        }
-
-        NavigableMap<BigDecimal, PriceLevel> levels = levels(entry.getSide());
-        PriceLevel level = levels.get(entry.getPrice());
+        NavigableMap<BigDecimal, PriceLevel> levels = levels(side);
+        PriceLevel level = levels.get(price);
         if (level == null) {
-            throw new EngineException("price level을 찾을 수 없습니다.: " + orderId);
+            throw new EngineException("price level을 찾을 수 없습니다.: " + side + " / " + price);
+        }
+        BookOrderEntry headEntry = level.peekFirst();
+        if (headEntry == null) {
+            throw new EngineException("체결할 선두 주문이 없습니다.: " + side + " / " + price);
         }
 
         PriceLevel.Snapshot before = level.snapshot();
-        boolean filled = level.applyExecution(entry, executedQty);
+        boolean filled = level.applyExecution(executedQty);
 
         PriceLevel.Snapshot after;
-        if (filled && level.isEmpty()) {
-            levels.remove(level.getPrice());
-            orderIndex.remove(orderId);
-            after = PriceLevel.emptySnapshot(entry.getSide(), entry.getPrice());
-        } else {
-            if (filled) {
-                orderIndex.remove(orderId);
+        if (filled) {
+            orderIndex.remove(headEntry.getOrderId());
+
+            if (level.isEmpty()) {
+                levels.remove(level.getPrice());
+                after = PriceLevel.emptySnapshot(side, price);
+            } else {
+                after = level.snapshot();
             }
+        } else {
             after = level.snapshot();
         }
 
-        return new LevelDelta(entry.getSide(), entry.getPrice(), before, after);
+        return new LevelDelta(side, price, before, after);
     }
 
     // add 전 엔트리 최소 검증.

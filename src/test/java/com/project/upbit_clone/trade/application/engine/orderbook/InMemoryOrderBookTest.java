@@ -136,7 +136,11 @@ class InMemoryOrderBookTest {
                 new BigDecimal("5")
         ));
 
-        InMemoryOrderBook.LevelDelta delta = orderBook.applyExecution(101L, new BigDecimal("4"));
+        InMemoryOrderBook.LevelDelta delta = orderBook.applyExecution(
+                OrderSide.BID,
+                new BigDecimal("50000"),
+                new BigDecimal("4")
+        );
 
         assertThat(delta.before().totalQty()).isEqualByComparingTo("15");
         assertThat(delta.before().orderCount()).isEqualTo(2);
@@ -166,7 +170,11 @@ class InMemoryOrderBookTest {
                 new BigDecimal("5")
         ));
 
-        orderBook.applyExecution(101L, new BigDecimal("4"));
+        orderBook.applyExecution(
+                OrderSide.BID,
+                new BigDecimal("50000"),
+                new BigDecimal("4")
+        );
         InMemoryOrderBook.LevelDelta delta = orderBook.remove(101L).orElseThrow();
 
         assertThat(delta.before().totalQty()).isEqualByComparingTo("11");
@@ -191,7 +199,11 @@ class InMemoryOrderBookTest {
                 new BigDecimal("10")
         ));
 
-        InMemoryOrderBook.LevelDelta delta = orderBook.applyExecution(101L, new BigDecimal("10"));
+        InMemoryOrderBook.LevelDelta delta = orderBook.applyExecution(
+                OrderSide.BID,
+                new BigDecimal("50000"),
+                new BigDecimal("10")
+        );
 
         assertThat(delta.before().totalQty()).isEqualByComparingTo("10");
         assertThat(delta.before().orderCount()).isEqualTo(1);
@@ -200,5 +212,38 @@ class InMemoryOrderBookTest {
         assertThat(orderBook.findOrder(101L)).isEmpty();
         assertThat(orderBook.getLevelSnapshot(OrderSide.BID, new BigDecimal("50000"))).isEmpty();
         assertThat(orderBook.getBestBid()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Happy : 같은 가격 레벨 체결은 항상 선두 주문부터 반영된다.")
+    void apply_execution_to_head_order_only() {
+        InMemoryOrderBook orderBook = new InMemoryOrderBook();
+        orderBook.add(BookOrderEntry.create(
+                101L,
+                OrderSide.BID,
+                new BigDecimal("50000"),
+                new BigDecimal("10")
+        ));
+        orderBook.add(BookOrderEntry.create(
+                102L,
+                OrderSide.BID,
+                new BigDecimal("50000"),
+                new BigDecimal("5")
+        ));
+
+        InMemoryOrderBook.LevelDelta delta = orderBook.applyExecution(
+                OrderSide.BID,
+                new BigDecimal("50000"),
+                new BigDecimal("10")
+        );
+
+        assertThat(delta.before().totalQty()).isEqualByComparingTo("15");
+        assertThat(delta.after().totalQty()).isEqualByComparingTo("5");
+        assertThat(orderBook.findOrder(101L)).isEmpty();
+        assertThat(orderBook.findOrder(102L)).isPresent();
+        assertThat(orderBook.findOrder(102L).orElseThrow().getRemainingQty()).isEqualByComparingTo("5");
+        assertThat(orderBook.getLevelSnapshot(OrderSide.BID, new BigDecimal("50000"))).isPresent();
+        assertThat(orderBook.getLevelSnapshot(OrderSide.BID, new BigDecimal("50000")).orElseThrow().orderCount())
+                .isEqualTo(1);
     }
 }
