@@ -1,0 +1,204 @@
+package com.project.upbit_clone.trade.application.engine.orderbook;
+
+import com.project.upbit_clone.trade.domain.vo.OrderSide;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.math.BigDecimal;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+@DisplayName("InMemoryOrderBook 테스트")
+class InMemoryOrderBookTest {
+    @Test
+    @DisplayName("Happy : bid 주문 1건을 추가하면 best bid와 레벨 상태가 갱신된다.")
+    void add_single_bid_order() {
+        InMemoryOrderBook orderBook = new InMemoryOrderBook();
+        BookOrderEntry entry = BookOrderEntry.create(
+                101L,
+                OrderSide.BID,
+                new BigDecimal("50000"),
+                new BigDecimal("1.25")
+        );
+
+        InMemoryOrderBook.LevelDelta delta = orderBook.add(entry);
+
+        assertThat(delta.before().totalQty()).isEqualByComparingTo("0");
+        assertThat(delta.before().orderCount()).isZero();
+        assertThat(delta.after().totalQty()).isEqualByComparingTo("1.25");
+        assertThat(delta.after().orderCount()).isEqualTo(1);
+        assertThat(orderBook.getBestBid()).isPresent();
+        assertThat(orderBook.getBestBid().orElseThrow().price()).isEqualByComparingTo("50000");
+        assertThat(orderBook.getBestAsk()).isEmpty();
+        assertThat(orderBook.getLevelSnapshot(OrderSide.BID, new BigDecimal("50000"))).isPresent();
+        assertThat(orderBook.getLevelSnapshot(OrderSide.BID, new BigDecimal("50000")).orElseThrow().totalQty())
+                .isEqualByComparingTo("1.25");
+    }
+
+    @Test
+    @DisplayName("Happy : 같은 가격 주문은 FIFO 순서로 누적된다.")
+    void keep_fifo_order_at_same_price_level() {
+        PriceLevel level = PriceLevel.create(OrderSide.BID, new BigDecimal("50000"));
+        BookOrderEntry first = BookOrderEntry.create(
+                101L,
+                OrderSide.BID,
+                new BigDecimal("50000"),
+                new BigDecimal("1.0")
+        );
+        BookOrderEntry second = BookOrderEntry.create(
+                102L,
+                OrderSide.BID,
+                new BigDecimal("50000"),
+                new BigDecimal("2.0")
+        );
+
+        level.enqueue(first);
+        level.enqueue(second);
+
+        assertThat(level.peekFirst()).isEqualTo(first);
+        assertThat(level.peekLast()).isEqualTo(second);
+        assertThat(level.getOrderCount()).isEqualTo(2);
+        assertThat(level.getTotalQty()).isEqualByComparingTo("3.0");
+    }
+
+    @Test
+    @DisplayName("Happy : bid는 높은 가격, ask는 낮은 가격이 최우선 호가가 된다.")
+    void track_best_quotes_by_side() {
+        InMemoryOrderBook orderBook = new InMemoryOrderBook();
+
+        orderBook.add(BookOrderEntry.create(
+                101L,
+                OrderSide.BID,
+                new BigDecimal("50000"),
+                new BigDecimal("1.0")
+        ));
+        orderBook.add(BookOrderEntry.create(
+                102L,
+                OrderSide.BID,
+                new BigDecimal("51000"),
+                new BigDecimal("1.0")
+        ));
+        orderBook.add(BookOrderEntry.create(
+                201L,
+                OrderSide.ASK,
+                new BigDecimal("52000"),
+                new BigDecimal("1.0")
+        ));
+        orderBook.add(BookOrderEntry.create(
+                202L,
+                OrderSide.ASK,
+                new BigDecimal("51500"),
+                new BigDecimal("1.0")
+        ));
+
+        assertThat(orderBook.getBestBid()).isPresent();
+        assertThat(orderBook.getBestBid().orElseThrow().price()).isEqualByComparingTo("51000");
+        assertThat(orderBook.getBestAsk()).isPresent();
+        assertThat(orderBook.getBestAsk().orElseThrow().price()).isEqualByComparingTo("51500");
+    }
+
+    @Test
+    @DisplayName("Happy : 마지막 주문을 제거하면 가격 레벨이 비워지고 북에서도 제거된다.")
+    void remove_last_order_and_delete_price_level() {
+        InMemoryOrderBook orderBook = new InMemoryOrderBook();
+        orderBook.add(BookOrderEntry.create(
+                101L,
+                OrderSide.BID,
+                new BigDecimal("50000"),
+                new BigDecimal("1.0")
+        ));
+
+        InMemoryOrderBook.LevelDelta delta = orderBook.remove(101L).orElseThrow();
+
+        assertThat(delta.before().totalQty()).isEqualByComparingTo("1.0");
+        assertThat(delta.before().orderCount()).isEqualTo(1);
+        assertThat(delta.after().totalQty()).isEqualByComparingTo("0");
+        assertThat(delta.after().orderCount()).isZero();
+        assertThat(orderBook.findOrder(101L)).isEmpty();
+        assertThat(orderBook.getLevelSnapshot(OrderSide.BID, new BigDecimal("50000"))).isEmpty();
+        assertThat(orderBook.getBestBid()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Happy : 부분 체결 후 레벨 총수량과 스냅샷이 함께 갱신된다.")
+    void apply_partial_execution_and_update_level_snapshot() {
+        InMemoryOrderBook orderBook = new InMemoryOrderBook();
+        orderBook.add(BookOrderEntry.create(
+                101L,
+                OrderSide.BID,
+                new BigDecimal("50000"),
+                new BigDecimal("10")
+        ));
+        orderBook.add(BookOrderEntry.create(
+                102L,
+                OrderSide.BID,
+                new BigDecimal("50000"),
+                new BigDecimal("5")
+        ));
+
+        InMemoryOrderBook.LevelDelta delta = orderBook.applyExecution(101L, new BigDecimal("4"));
+
+        assertThat(delta.before().totalQty()).isEqualByComparingTo("15");
+        assertThat(delta.before().orderCount()).isEqualTo(2);
+        assertThat(delta.after().totalQty()).isEqualByComparingTo("11");
+        assertThat(delta.after().orderCount()).isEqualTo(2);
+        assertThat(orderBook.findOrder(101L)).isPresent();
+        assertThat(orderBook.findOrder(101L).orElseThrow().getRemainingQty()).isEqualByComparingTo("6");
+        assertThat(orderBook.getLevelSnapshot(OrderSide.BID, new BigDecimal("50000"))).isPresent();
+        assertThat(orderBook.getLevelSnapshot(OrderSide.BID, new BigDecimal("50000")).orElseThrow().totalQty())
+                .isEqualByComparingTo("11");
+    }
+
+    @Test
+    @DisplayName("Happy : 부분 체결된 주문을 제거하면 남은 레벨 총수량이 정확히 유지된다.")
+    void remove_partially_filled_order_and_keep_correct_total_qty() {
+        InMemoryOrderBook orderBook = new InMemoryOrderBook();
+        orderBook.add(BookOrderEntry.create(
+                101L,
+                OrderSide.BID,
+                new BigDecimal("50000"),
+                new BigDecimal("10")
+        ));
+        orderBook.add(BookOrderEntry.create(
+                102L,
+                OrderSide.BID,
+                new BigDecimal("50000"),
+                new BigDecimal("5")
+        ));
+
+        orderBook.applyExecution(101L, new BigDecimal("4"));
+        InMemoryOrderBook.LevelDelta delta = orderBook.remove(101L).orElseThrow();
+
+        assertThat(delta.before().totalQty()).isEqualByComparingTo("11");
+        assertThat(delta.before().orderCount()).isEqualTo(2);
+        assertThat(delta.after().totalQty()).isEqualByComparingTo("5");
+        assertThat(delta.after().orderCount()).isEqualTo(1);
+        assertThat(orderBook.findOrder(101L)).isEmpty();
+        assertThat(orderBook.findOrder(102L)).isPresent();
+        assertThat(orderBook.getLevelSnapshot(OrderSide.BID, new BigDecimal("50000"))).isPresent();
+        assertThat(orderBook.getLevelSnapshot(OrderSide.BID, new BigDecimal("50000")).orElseThrow().totalQty())
+                .isEqualByComparingTo("5");
+    }
+
+    @Test
+    @DisplayName("Happy : 마지막 주문이 전량 체결되면 레벨과 인덱스에서 함께 제거된다.")
+    void apply_full_execution_and_remove_last_order_from_book() {
+        InMemoryOrderBook orderBook = new InMemoryOrderBook();
+        orderBook.add(BookOrderEntry.create(
+                101L,
+                OrderSide.BID,
+                new BigDecimal("50000"),
+                new BigDecimal("10")
+        ));
+
+        InMemoryOrderBook.LevelDelta delta = orderBook.applyExecution(101L, new BigDecimal("10"));
+
+        assertThat(delta.before().totalQty()).isEqualByComparingTo("10");
+        assertThat(delta.before().orderCount()).isEqualTo(1);
+        assertThat(delta.after().totalQty()).isEqualByComparingTo("0");
+        assertThat(delta.after().orderCount()).isZero();
+        assertThat(orderBook.findOrder(101L)).isEmpty();
+        assertThat(orderBook.getLevelSnapshot(OrderSide.BID, new BigDecimal("50000"))).isEmpty();
+        assertThat(orderBook.getBestBid()).isEmpty();
+    }
+}
