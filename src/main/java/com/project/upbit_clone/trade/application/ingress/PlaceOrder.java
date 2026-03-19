@@ -1,8 +1,11 @@
 package com.project.upbit_clone.trade.application.ingress;
 
+import com.project.upbit_clone.trade.application.dispatch.CommandDispatcher;
+import com.project.upbit_clone.trade.application.dispatch.CommandMessage;
 import com.project.upbit_clone.trade.domain.model.Market;
 import com.project.upbit_clone.trade.domain.model.Order;
 import com.project.upbit_clone.trade.domain.repository.MarketRepository;
+import com.project.upbit_clone.trade.infrastructure.persistence.model.CommandLog;
 import com.project.upbit_clone.trade.domain.vo.OrderSide;
 import com.project.upbit_clone.trade.domain.vo.OrderType;
 import com.project.upbit_clone.trade.domain.vo.TimeInForce;
@@ -23,7 +26,8 @@ public class PlaceOrder extends AbstractOrderIngress<PlaceOrder.Command> {
             JsonMapper jsonMapper,
             IdempotencyHitService idempotencyHitService,
             CommandLogAppendService commandLogAppendService,
-            OrderCommandHashService orderCommandHashService
+            OrderCommandHashService orderCommandHashService,
+            CommandDispatcher commandDispatcher
     ) {
         super(
                 userRepository,
@@ -31,7 +35,8 @@ public class PlaceOrder extends AbstractOrderIngress<PlaceOrder.Command> {
                 jsonMapper,
                 idempotencyHitService,
                 commandLogAppendService,
-                orderCommandHashService
+                orderCommandHashService,
+                commandDispatcher
         );
     }
 
@@ -69,5 +74,21 @@ public class PlaceOrder extends AbstractOrderIngress<PlaceOrder.Command> {
                 command.quantity(),
                 command.quoteAmount()
         ));
+    }
+
+    @Override
+    protected CommandMessage toCommandMessage(Long commandLogId, Command command) {
+        return new CommandMessage.Place(
+                commandLogId,
+                command.userId(),
+                command.marketId(),
+                command.clientOrderId(),
+                command.orderSide(),
+                command.orderType(),
+                command.timeInForce(),
+                command.price(),
+                command.quantity(),
+                command.quoteAmount()
+        );
     }
 }

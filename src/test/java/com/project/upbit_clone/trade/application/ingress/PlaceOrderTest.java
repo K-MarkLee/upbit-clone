@@ -4,6 +4,8 @@ import com.project.upbit_clone.asset.domain.model.Asset;
 import com.project.upbit_clone.global.domain.vo.EnumStatus;
 import com.project.upbit_clone.global.exception.BusinessException;
 import com.project.upbit_clone.global.exception.ErrorCode;
+import com.project.upbit_clone.trade.application.dispatch.CommandDispatcher;
+import com.project.upbit_clone.trade.application.dispatch.CommandMessage;
 import com.project.upbit_clone.trade.domain.model.Market;
 import com.project.upbit_clone.trade.domain.repository.MarketRepository;
 import com.project.upbit_clone.trade.domain.vo.OrderSide;
@@ -33,6 +35,7 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -53,6 +56,9 @@ class PlaceOrderTest {
     @Mock
     private CommandLogAppendService commandLogAppendService;
 
+    @Mock
+    private CommandDispatcher commandDispatcher;
+
     private PlaceOrder placeOrder;
 
     @BeforeEach
@@ -63,7 +69,8 @@ class PlaceOrderTest {
                 JsonMapper.builder().build(),
                 idempotencyHitService,
                 commandLogAppendService,
-                new OrderCommandHashService()
+                new OrderCommandHashService(),
+                commandDispatcher
         );
     }
 
@@ -101,6 +108,38 @@ class PlaceOrderTest {
         assertThat(appended.getUserId()).isEqualTo(1L);
         assertThat(appended.getMarketId()).isEqualTo(1L);
         assertThat(appended.getClientOrderId()).isEqualTo("cid-1");
+        verify(commandDispatcher).dispatch(any(CommandMessage.class));
+    }
+
+    @Test
+    @DisplayName("Happy : dispatch 실패여도 append 성공이면 ACCEPTED 응답을 반환한다.")
+    void handle_returns_accepted_when_dispatch_fails() {
+        // given
+        PlaceOrder.Command command = validCommand();
+        User activeUser = User.create("u@test.com", "user", EnumStatus.ACTIVE, "pw");
+        Market activeMarket = activeMarket();
+
+        when(idempotencyHitService.find(1L, "cid-1", CommandType.PLACE_ORDER))
+                .thenReturn(Optional.empty());
+        when(userRepository.findById(1L)).thenReturn(Optional.of(activeUser));
+        when(marketRepository.findWithAssetsById(1L)).thenReturn(Optional.of(activeMarket));
+        when(commandLogAppendService.append(any(CommandLog.class)))
+                .thenAnswer(invocation -> {
+                    CommandLog log = invocation.getArgument(0);
+                    setCommandLogId(log, 100L);
+                    return log;
+                });
+        doThrow(new RuntimeException("dispatch failed"))
+                .when(commandDispatcher).dispatch(any(CommandMessage.class));
+
+        // when
+        CommandAck ack = placeOrder.handle(command);
+
+        // then
+        assertThat(ack.status()).isEqualTo(CommandAck.Status.ACCEPTED);
+        assertThat(ack.idempotencyHit()).isFalse();
+        assertThat(ack.commandLogId()).isEqualTo(100L);
+        verify(commandDispatcher).dispatch(any(CommandMessage.class));
     }
 
     @Test

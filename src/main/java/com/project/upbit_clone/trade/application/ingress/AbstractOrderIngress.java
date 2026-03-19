@@ -1,5 +1,7 @@
 package com.project.upbit_clone.trade.application.ingress;
 
+import com.project.upbit_clone.trade.application.dispatch.CommandDispatcher;
+import com.project.upbit_clone.trade.application.dispatch.CommandMessage;
 import com.project.upbit_clone.global.domain.vo.EnumStatus;
 import com.project.upbit_clone.global.exception.BusinessException;
 import com.project.upbit_clone.global.exception.ErrorCode;
@@ -8,6 +10,8 @@ import com.project.upbit_clone.trade.domain.repository.MarketRepository;
 import com.project.upbit_clone.trade.infrastructure.persistence.model.CommandLog;
 import com.project.upbit_clone.user.domain.model.User;
 import com.project.upbit_clone.user.domain.repository.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
@@ -17,12 +21,15 @@ import java.util.UUID;
 
 abstract class AbstractOrderIngress<C extends OrderCommand> {
 
+    private static final Logger log = LoggerFactory.getLogger(AbstractOrderIngress.class);
+
     private final UserRepository userRepository;
     private final MarketRepository marketRepository;
     private final JsonMapper jsonMapper;
     private final IdempotencyHitService idempotencyHitService;
     private final CommandLogAppendService commandLogAppendService;
     private final OrderCommandHashService orderCommandHashService;
+    private final CommandDispatcher commandDispatcher;
 
     protected AbstractOrderIngress(
             UserRepository userRepository,
@@ -30,7 +37,8 @@ abstract class AbstractOrderIngress<C extends OrderCommand> {
             JsonMapper jsonMapper,
             IdempotencyHitService idempotencyHitService,
             CommandLogAppendService commandLogAppendService,
-            OrderCommandHashService orderCommandHashService
+            OrderCommandHashService orderCommandHashService,
+            CommandDispatcher commandDispatcher
     ) {
         this.userRepository = userRepository;
         this.marketRepository = marketRepository;
@@ -38,6 +46,7 @@ abstract class AbstractOrderIngress<C extends OrderCommand> {
         this.idempotencyHitService = idempotencyHitService;
         this.commandLogAppendService = commandLogAppendService;
         this.orderCommandHashService = orderCommandHashService;
+        this.commandDispatcher = commandDispatcher;
     }
 
     protected CommandAck handleInternal(C command) {
@@ -58,9 +67,10 @@ abstract class AbstractOrderIngress<C extends OrderCommand> {
         validateBusiness(command, market, user);
 
         CommandLog commandLog = createCommandLog(command, requestHash);
+        CommandLog saved;
         try {
-            CommandLog saved = commandLogAppendService.append(commandLog);
-            return CommandAck.accepted(saved, false);
+            saved = commandLogAppendService.append(commandLog);
+
         } catch (DataIntegrityViolationException exception) {
             Optional<CommandLog> recovered = idempotencyHitService.findInNewTransaction(
                     command.userId(),
@@ -72,10 +82,27 @@ abstract class AbstractOrderIngress<C extends OrderCommand> {
             }
             return resolveIdempotencyHit(recovered.get(), requestHash);
         }
+        try {
+            commandDispatcher.dispatch(toCommandMessage(saved.getId(), command));
+        } catch (RuntimeException exception) {
+            // dispatch 실패 로거
+            log.error(
+                    "Append 후 command dispatch를 실패했습니다. commandLogId={}, commandType={}, userId={}, marketId={}, clientOrderId={}",
+                    saved.getId(),
+                    command.commandType(),
+                    command.userId(),
+                    command.marketId(),
+                    command.clientOrderId(),
+                    exception
+            );
+        }
+        return CommandAck.accepted(saved, false);
     }
 
     protected void validateBusiness(C command, Market market, User user) {
     }
+
+    protected abstract CommandMessage toCommandMessage(Long commandLogId, C command);
 
     // 최소 검증
     private void validateInput(OrderCommand command) {
