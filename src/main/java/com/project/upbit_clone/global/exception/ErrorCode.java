@@ -54,7 +54,7 @@ public enum ErrorCode {
     INVALID_LIMIT_ASK_INPUT("D004", "LIMIT-ASK 주문 입력이 유효하지 않습니다.", HttpStatus.BAD_REQUEST),
     INVALID_MARKET_BID_INPUT("D005", "MARKET-BID 주문 입력이 유효하지 않습니다.", HttpStatus.BAD_REQUEST),
     INVALID_MARKET_ASK_INPUT("D006", "MARKET-ASK 주문 입력이 유효하지 않습니다.", HttpStatus.BAD_REQUEST),
-    MISSING_ORDER_REQUIRED_VALUE("D007","주문에 필요한 필수값이 누락되었습니다.", HttpStatus.BAD_REQUEST),
+    MISSING_ORDER_REQUIRED_VALUE("D007","주문에 필요한 필수값이 누락되어 있습니다.", HttpStatus.BAD_REQUEST),
     LOCK_AMOUNT_TOO_LOW("D008", "락 계산 금액이 자산 최소 단위보다 작습니다." , HttpStatus.BAD_REQUEST),
     INVALID_ORDER_SIDE("D009", "유효하지 않은 주문 방향입니다", HttpStatus.BAD_REQUEST),
     ORDER_NOT_OPEN("D0010", "현재 상태에서는 주문을 처리할 수 없습니다.", HttpStatus.BAD_REQUEST),
