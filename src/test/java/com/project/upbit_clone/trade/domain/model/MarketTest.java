@@ -41,7 +41,7 @@ class MarketTest {
     void create_market_with_valid_inputs() {
         // given
         Market.CreateCommand command = createCommand(
-                baseAsset, quoteAsset, marketCode, status, minOrderQuote, tickSize
+                baseAsset, quoteAsset, status, minOrderQuote, tickSize
         );
 
         // when
@@ -62,7 +62,7 @@ class MarketTest {
     void create_market_with_null_status() {
         // given
         Market.CreateCommand command = createCommand(
-                baseAsset, quoteAsset, marketCode, null, minOrderQuote, tickSize
+                baseAsset, quoteAsset, null, minOrderQuote, tickSize
         );
 
         // when
@@ -86,49 +86,16 @@ class MarketTest {
     private static Stream<Arguments> nullRequiredFieldCommands() {
         Asset baseAsset = Asset.create("BTC", "Bitcoin", (byte) 8, EnumStatus.ACTIVE);
         Asset quoteAsset = Asset.create("KRW", "Korean Won", (byte) 2, EnumStatus.ACTIVE);
-        String marketCode = "KRW-BTC";
         BigDecimal minOrderQuote = BigDecimal.ZERO;
         BigDecimal tickSize = new BigDecimal("1000");
 
         return Stream.of(
                 Arguments.of("command null", null),
-                Arguments.of("baseAsset null", new Market.CreateCommand(null, quoteAsset, marketCode, EnumStatus.ACTIVE, minOrderQuote, tickSize)),
-                Arguments.of("quoteAsset null", new Market.CreateCommand(baseAsset, null, marketCode, EnumStatus.ACTIVE, minOrderQuote, tickSize)),
-                Arguments.of("marketCode null", new Market.CreateCommand(baseAsset, quoteAsset, null, EnumStatus.ACTIVE, minOrderQuote, tickSize)),
-                Arguments.of("minOrderQuote null", new Market.CreateCommand(baseAsset, quoteAsset, marketCode, EnumStatus.ACTIVE, null, tickSize)),
-                Arguments.of("tickSize null", new Market.CreateCommand(baseAsset, quoteAsset, marketCode, EnumStatus.ACTIVE, minOrderQuote, null))
+                Arguments.of("baseAsset null", new Market.CreateCommand(null, quoteAsset, EnumStatus.ACTIVE, minOrderQuote, tickSize)),
+                Arguments.of("quoteAsset null", new Market.CreateCommand(baseAsset, null, EnumStatus.ACTIVE, minOrderQuote, tickSize)),
+                Arguments.of("minOrderQuote null", new Market.CreateCommand(baseAsset, quoteAsset, EnumStatus.ACTIVE, null, tickSize)),
+                Arguments.of("tickSize null", new Market.CreateCommand(baseAsset, quoteAsset, EnumStatus.ACTIVE, minOrderQuote, null))
         );
-    }
-
-    @Test
-    @DisplayName("Negative : 필수 입력값이 blank이면 BusinessException을 반환한다.")
-    void create_market_with_blank_inputs() {
-        // given
-        Market.CreateCommand command = createCommand(
-                baseAsset, quoteAsset, "", null, minOrderQuote, tickSize
-        );
-
-        // when&then
-        // marketCode blank
-        assertThatThrownBy(() -> Market.create(command))
-                .isInstanceOf(BusinessException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_MARKET_INPUT);
-
-    }
-
-    @Test
-    @DisplayName("Negative : 필수 입력값이 blank이면 BusinessException을 반환한다.")
-    void create_market_with_blank_inputs_2() {
-        // given
-        Market.CreateCommand command = createCommand(
-                baseAsset, quoteAsset, "   ", null, minOrderQuote, tickSize
-        );
-
-        // when&then
-        assertThatThrownBy(() -> Market.create(command))
-                .isInstanceOf(BusinessException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_MARKET_INPUT);
-
     }
 
     @Test
@@ -136,7 +103,7 @@ class MarketTest {
     void create_market_with_same_assets() {
         // given
         Market.CreateCommand command = createCommand(
-                baseAsset, baseAsset, marketCode, status, minOrderQuote, tickSize
+                baseAsset, baseAsset, status, minOrderQuote, tickSize
         );
 
         // when & then
@@ -149,13 +116,12 @@ class MarketTest {
     private Market.CreateCommand createCommand(
             Asset baseAsset,
             Asset quoteAsset,
-            String marketCode,
             EnumStatus status,
             BigDecimal minOrderQuote,
             BigDecimal tickSize
     ) {
         return new Market.CreateCommand(
-                baseAsset, quoteAsset, marketCode, status, minOrderQuote, tickSize
+                baseAsset, quoteAsset, status, minOrderQuote, tickSize
         );
     }
 }

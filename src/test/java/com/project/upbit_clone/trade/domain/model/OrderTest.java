@@ -781,7 +781,6 @@ class OrderTest {
         return Market.create(new Market.CreateCommand(
                 baseAsset,
                 quoteAsset,
-                "KRW-BTC",
                 EnumStatus.ACTIVE,
                 new BigDecimal("5000"),
                 new BigDecimal("1000")

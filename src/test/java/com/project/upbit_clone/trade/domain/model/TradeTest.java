@@ -213,7 +213,6 @@ class TradeTest {
         Market differentMarket = Market.create(new Market.CreateCommand(
                 baseAsset,
                 quoteAsset,
-                "KRW-ETH",
                 EnumStatus.ACTIVE,
                 new BigDecimal("5000"),
                 new BigDecimal("1000")
@@ -241,7 +240,6 @@ class TradeTest {
         Market sameIdMarket = Market.create(new Market.CreateCommand(
                 baseAsset,
                 quoteAsset,
-                "KRW-BTC-SAME-ID",
                 EnumStatus.ACTIVE,
                 new BigDecimal("5000"),
                 new BigDecimal("1000")
@@ -273,7 +271,6 @@ class TradeTest {
         Market differentIdMarket = Market.create(new Market.CreateCommand(
                 baseAsset,
                 quoteAsset,
-                "KRW-BTC-DIFF-ID",
                 EnumStatus.ACTIVE,
                 new BigDecimal("5000"),
                 new BigDecimal("1000")
@@ -378,7 +375,6 @@ class TradeTest {
         Market market = Market.create(new Market.CreateCommand(
                 baseAsset,
                 quoteAsset,
-                "KRW-BTC",
                 EnumStatus.ACTIVE,
                 new BigDecimal("5000"),
                 new BigDecimal("1000")

@@ -24,6 +24,7 @@ class MarketWorkerManagerTest {
                 1L,
                 10L,
                 100L,
+                "KRW-BTC",
                 "cid-1",
                 OrderSide.BID,
                 OrderType.LIMIT,
@@ -36,6 +37,7 @@ class MarketWorkerManagerTest {
                 2L,
                 10L,
                 100L,
+                "KRW-BTC",
                 "cid-2",
                 "USER_REQUEST"
         );
@@ -60,6 +62,7 @@ class MarketWorkerManagerTest {
                 1L,
                 10L,
                 100L,
+                "KRW-BTC",
                 "cid-btc",
                 OrderSide.BID,
                 OrderType.LIMIT,
@@ -72,6 +75,7 @@ class MarketWorkerManagerTest {
                 2L,
                 11L,
                 200L,
+                "KRW-ETH",
                 "cid-eth",
                 OrderSide.ASK,
                 OrderType.LIMIT,
