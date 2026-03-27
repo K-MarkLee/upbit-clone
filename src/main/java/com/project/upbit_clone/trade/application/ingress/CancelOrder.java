@@ -1,5 +1,7 @@
 package com.project.upbit_clone.trade.application.ingress;
 
+import com.project.upbit_clone.trade.application.dispatch.CommandDispatcher;
+import com.project.upbit_clone.trade.application.dispatch.CommandMessage;
 import com.project.upbit_clone.global.exception.BusinessException;
 import com.project.upbit_clone.global.exception.ErrorCode;
 import com.project.upbit_clone.trade.domain.model.Market;
@@ -26,7 +28,8 @@ public class CancelOrder extends AbstractOrderIngress<CancelOrder.Command> {
             JsonMapper jsonMapper,
             IdempotencyHitService idempotencyHitService,
             CommandLogAppendService commandLogAppendService,
-            OrderCommandHashService orderCommandHashService
+            OrderCommandHashService orderCommandHashService,
+            CommandDispatcher commandDispatcher
     ) {
         super(
                 userRepository,
@@ -34,7 +37,8 @@ public class CancelOrder extends AbstractOrderIngress<CancelOrder.Command> {
                 jsonMapper,
                 idempotencyHitService,
                 commandLogAppendService,
-                orderCommandHashService
+                orderCommandHashService,
+                commandDispatcher
         );
         this.commandLogRepository = commandLogRepository;
     }
@@ -69,5 +73,16 @@ public class CancelOrder extends AbstractOrderIngress<CancelOrder.Command> {
         if (!command.marketId().equals(placeCommand.get().getMarketId())) {
             throw new BusinessException(ErrorCode.ORDER_NOT_FOUND);
         }
+    }
+
+    @Override
+    protected CommandMessage toCommandMessage(Long commandLogId, Command command) {
+        return new CommandMessage.Cancel(
+                commandLogId,
+                command.userId(),
+                command.marketId(),
+                command.clientOrderId(),
+                command.cancelReason()
+        );
     }
 }

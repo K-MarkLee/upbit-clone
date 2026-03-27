@@ -4,6 +4,8 @@ import com.project.upbit_clone.asset.domain.model.Asset;
 import com.project.upbit_clone.global.domain.vo.EnumStatus;
 import com.project.upbit_clone.global.exception.BusinessException;
 import com.project.upbit_clone.global.exception.ErrorCode;
+import com.project.upbit_clone.trade.application.dispatch.CommandDispatcher;
+import com.project.upbit_clone.trade.application.dispatch.CommandMessage;
 import com.project.upbit_clone.trade.domain.model.Market;
 import com.project.upbit_clone.trade.domain.repository.MarketRepository;
 import com.project.upbit_clone.trade.infrastructure.persistence.model.CommandLog;
@@ -54,6 +56,9 @@ class CancelOrderTest {
     @Mock
     private CommandLogAppendService commandLogAppendService;
 
+    @Mock
+    private CommandDispatcher commandDispatcher;
+
     private CancelOrder cancelOrder;
 
     @BeforeEach
@@ -65,7 +70,8 @@ class CancelOrderTest {
                 JsonMapper.builder().build(),
                 idempotencyHitService,
                 commandLogAppendService,
-                new OrderCommandHashService()
+                new OrderCommandHashService(),
+                commandDispatcher
         );
     }
 
@@ -114,6 +120,7 @@ class CancelOrderTest {
         assertThat(appended.getUserId()).isEqualTo(1L);
         assertThat(appended.getMarketId()).isEqualTo(1L);
         assertThat(appended.getClientOrderId()).isEqualTo("cid-1");
+        verify(commandDispatcher).dispatch(any(CommandMessage.class));
     }
 
     @ParameterizedTest(name = "[{index}] {0}")
