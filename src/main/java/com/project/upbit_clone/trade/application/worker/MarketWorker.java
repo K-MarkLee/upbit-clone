@@ -46,9 +46,7 @@ public class MarketWorker {
 
     // place검증
     private void validatePlace(CommandMessage.Place message) {
-        if (message.orderSide() == null
-                || message.orderType() == null
-                || message.timeInForce() == null) {
+        if (message.orderSide() == null || message.orderType() == null) {
             throw new IllegalArgumentException("place message 필수값이 누락되었습니다.");
         }
 
