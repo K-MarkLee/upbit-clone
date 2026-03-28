@@ -7,18 +7,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Objects;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class MarketWorker {
 
     private static final Logger log = LoggerFactory.getLogger(MarketWorker.class);
 
-    // 임시 array 사이즈 1024 설정
-    static final int DEFAULT_MAILBOX_CAPACITY = 1024;
-
     private final Long marketId;
-    private final BlockingQueue<CommandMessage> mailbox = new ArrayBlockingQueue<>(DEFAULT_MAILBOX_CAPACITY);
+    private final BlockingQueue<CommandMessage> mailbox = new LinkedBlockingQueue<>();
     private volatile String marketCode;
     private volatile boolean running;
     private Thread workerThread;

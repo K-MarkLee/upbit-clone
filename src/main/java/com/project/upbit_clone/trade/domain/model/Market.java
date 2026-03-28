@@ -39,7 +39,7 @@ public class Market extends BaseEntity {
     @JoinColumn(name = "quote_asset_id", nullable = false)
     private Asset quoteAsset;
 
-    @Column(name = "market_code", nullable = false, length = 20)
+    @Column(name = "market_code", nullable = false, length = 21)
     private String marketCode;
 
     @Enumerated(EnumType.STRING)
@@ -97,6 +97,12 @@ public class Market extends BaseEntity {
         if (baseSymbol == null || baseSymbol.isBlank() || quoteSymbol == null || quoteSymbol.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_MARKET_INPUT);
         }
-        return quoteSymbol + "-" + baseSymbol;
+
+        String marketCode = quoteSymbol + "-" + baseSymbol;
+
+        if (marketCode.length() > 21) {
+            throw new BusinessException(ErrorCode.INVALID_MARKET_INPUT);
+        }
+        return marketCode;
     }
 }
