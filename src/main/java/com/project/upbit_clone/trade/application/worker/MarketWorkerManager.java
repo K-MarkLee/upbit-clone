@@ -15,6 +15,7 @@ public class MarketWorkerManager {
                 message.marketId(),
                 MarketWorker::new
         );
+        worker.start();
         worker.enqueue(message);
     }
 

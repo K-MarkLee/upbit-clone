@@ -63,15 +63,14 @@ public class MarketWorker {
                 dispatch(message);
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
-                if (!running) {
-                    return;
-                }
-                log.warn(
-                        "MarketWorker가 대기 중 인터럽트되었습니다. marketId={}, marketCode={}",
+                running = false;
+                log.info(
+                        "MarketWorker가 인터럽트되어 종료합니다. marketId={}, marketCode={}",
                         marketId,
                         marketCode,
                         exception
                 );
+                return;
             } catch (RuntimeException exception) {
                 log.error(
                         "MarketWorker 메시지 처리에 실패했습니다. marketId={}, marketCode={}",
