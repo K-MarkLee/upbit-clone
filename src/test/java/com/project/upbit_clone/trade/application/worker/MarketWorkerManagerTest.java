@@ -1,6 +1,7 @@
 package com.project.upbit_clone.trade.application.worker;
 
 import com.project.upbit_clone.trade.application.dispatch.CommandMessage;
+import com.project.upbit_clone.trade.application.engine.MatchingEngineCore;
 import com.project.upbit_clone.trade.domain.vo.OrderSide;
 import com.project.upbit_clone.trade.domain.vo.OrderType;
 import com.project.upbit_clone.trade.domain.vo.TimeInForce;
@@ -10,6 +11,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -27,7 +30,7 @@ class MarketWorkerManagerTest {
 
     @BeforeEach
     void setUp() {
-        marketWorkerManager = new MarketWorkerManager();
+        marketWorkerManager = new MarketWorkerManager(new MatchingEngineCore());
         btcPlaceMessage = new CommandMessage.Place(
                 1L,
                 10L,
@@ -139,5 +142,86 @@ class MarketWorkerManagerTest {
         assertThatThrownBy(() -> marketWorkerManager.submit(btcPlaceMessage))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("MarketWorkerManager는 종료 중이거나 종료되었습니다.");
+    }
+
+    @Test
+    @DisplayName("submit과 shutdownAll은 같은 임계영역에서 직렬화된다.")
+    void submit_and_shutdown_all_are_serialized() throws InterruptedException {
+        // given
+        BlockingCreateMarketWorkerManager blockingManager =
+                new BlockingCreateMarketWorkerManager(new MatchingEngineCore());
+        marketWorkerManager = blockingManager;
+        CountDownLatch submitCompleted = new CountDownLatch(1);
+        CountDownLatch shutdownCompleted = new CountDownLatch(1);
+
+        Thread submitThread = Thread.ofVirtual().start(() -> {
+            try {
+                blockingManager.submit(btcPlaceMessage);
+            } finally {
+                submitCompleted.countDown();
+            }
+        });
+
+        assertThat(blockingManager.awaitCreationStarted()).isTrue();
+
+        Thread shutdownThread = Thread.ofVirtual().start(() -> {
+            try {
+                blockingManager.shutdownAll();
+            } finally {
+                shutdownCompleted.countDown();
+            }
+        });
+
+        // then
+        assertThat(shutdownCompleted.await(200, TimeUnit.MILLISECONDS)).isFalse();
+
+        // when
+        blockingManager.releaseCreation();
+
+        assertThat(submitCompleted.await(1, TimeUnit.SECONDS)).isTrue();
+        assertThat(shutdownCompleted.await(1, TimeUnit.SECONDS)).isTrue();
+        submitThread.join();
+        shutdownThread.join();
+        assertThat(marketWorkerManager.workerCount()).isZero();
+        assertThatThrownBy(() -> marketWorkerManager.submit(btcPlaceMessage))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("MarketWorkerManager는 종료 중이거나 종료되었습니다.");
+    }
+
+    private static final class BlockingCreateMarketWorkerManager extends MarketWorkerManager {
+        private final MatchingEngineCore matchingEngineCore;
+        private final CountDownLatch creationStarted = new CountDownLatch(1);
+        private final CountDownLatch allowCreation = new CountDownLatch(1);
+
+        private BlockingCreateMarketWorkerManager(MatchingEngineCore matchingEngineCore) {
+            super(matchingEngineCore);
+            this.matchingEngineCore = matchingEngineCore;
+        }
+
+        @Override
+        MarketWorker createWorker(Long marketId) {
+            creationStarted.countDown();
+            awaitAllowCreation();
+            return new MarketWorker(marketId, matchingEngineCore);
+        }
+
+        private boolean awaitCreationStarted() throws InterruptedException {
+            return creationStarted.await(1, TimeUnit.SECONDS);
+        }
+
+        private void releaseCreation() {
+            allowCreation.countDown();
+        }
+
+        private void awaitAllowCreation() {
+            try {
+                if (!allowCreation.await(1, TimeUnit.SECONDS)) {
+                    throw new AssertionError("worker 생성 해제가 시간 내에 일어나지 않았습니다.");
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError("worker 생성 대기 중 인터럽트가 발생했습니다.", exception);
+            }
+        }
     }
 }

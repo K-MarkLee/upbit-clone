@@ -1,6 +1,7 @@
 package com.project.upbit_clone.trade.application.worker;
 
 import com.project.upbit_clone.trade.application.dispatch.CommandMessage;
+import com.project.upbit_clone.trade.application.engine.MatchingEngineCore;
 import jakarta.annotation.PreDestroy;
 import org.springframework.stereotype.Component;
 
@@ -10,16 +11,21 @@ import java.util.concurrent.ConcurrentHashMap;
 public class MarketWorkerManager {
 
     private final ConcurrentHashMap<Long, MarketWorker> workers = new ConcurrentHashMap<>();
+    private final MatchingEngineCore matchingEngineCore;
     private volatile boolean accepting = true;
 
-    public void submit(CommandMessage message) {
+    public MarketWorkerManager(MatchingEngineCore matchingEngineCore) {
+        this.matchingEngineCore = matchingEngineCore;
+    }
+
+    public synchronized void submit(CommandMessage message) {
         if (!accepting) {
             throw new IllegalStateException("MarketWorkerManager는 종료 중이거나 종료되었습니다.");
         }
 
         MarketWorker worker = workers.computeIfAbsent(
                 message.marketId(),
-                MarketWorker::new
+                this::createWorker
         );
         worker.start();
         worker.enqueue(message);
@@ -34,6 +40,10 @@ public class MarketWorkerManager {
         accepting = false;
         workers.values().forEach(MarketWorker::shutdown);
         workers.clear();
+    }
+
+    MarketWorker createWorker(Long marketId) {
+        return new MarketWorker(marketId, matchingEngineCore);
     }
 
     MarketWorker workerFor(Long marketId) {

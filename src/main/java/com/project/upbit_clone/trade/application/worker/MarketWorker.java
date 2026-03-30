@@ -1,6 +1,9 @@
 package com.project.upbit_clone.trade.application.worker;
 
 import com.project.upbit_clone.trade.application.dispatch.CommandMessage;
+import com.project.upbit_clone.trade.application.engine.EngineResult;
+import com.project.upbit_clone.trade.application.engine.MatchingEngineCore;
+import com.project.upbit_clone.trade.application.engine.orderbook.InMemoryOrderBook;
 import com.project.upbit_clone.trade.domain.vo.OrderSide;
 import com.project.upbit_clone.trade.domain.vo.OrderType;
 import org.slf4j.Logger;
@@ -15,13 +18,17 @@ public class MarketWorker {
     private static final Logger log = LoggerFactory.getLogger(MarketWorker.class);
 
     private final Long marketId;
+    private final MatchingEngineCore matchingEngineCore;
+    private final InMemoryOrderBook orderBook;
     private final BlockingQueue<CommandMessage> mailbox = new LinkedBlockingQueue<>();
     private volatile String marketCode;
     private volatile boolean running;
     private Thread workerThread;
 
-    public MarketWorker(Long marketId) {
+    public MarketWorker(Long marketId, MatchingEngineCore matchingEngineCore) {
         this.marketId = Objects.requireNonNull(marketId, "marketId는 null값일 수 없습니다.");
+        this.matchingEngineCore = Objects.requireNonNull(matchingEngineCore, "matchingEngineCore는 null값일 수 없습니다.");
+        this.orderBook = new InMemoryOrderBook();
     }
 
     public synchronized void start() {
@@ -90,6 +97,16 @@ public class MarketWorker {
     }
 
     private void handlePlace(CommandMessage.Place message) {
+        EngineResult.PlaceResult result = matchingEngineCore.place(message, orderBook);
+        log.debug(
+                "주문(place) 처리 결과: marketId={}, marketCode={}, commandLogId={}, takerStatus={}, remainingQuantity={}, fillCount={}",
+                marketId,
+                marketCode,
+                message.commandLogId(),
+                result.takerStatus(),
+                result.remainingQuantity(),
+                result.fills().size()
+        );
     }
 
     private void handleCancel(CommandMessage.Cancel message) {
