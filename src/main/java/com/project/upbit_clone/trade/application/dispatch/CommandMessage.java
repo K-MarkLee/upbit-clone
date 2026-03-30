@@ -12,6 +12,7 @@ public sealed interface CommandMessage permits CommandMessage.Place, CommandMess
     Long commandLogId();
     Long userId();
     Long marketId();
+    String marketCode();
     String clientOrderId();
     CommandType commandType();
 
@@ -19,6 +20,7 @@ public sealed interface CommandMessage permits CommandMessage.Place, CommandMess
             Long commandLogId,
             Long userId,
             Long marketId,
+            String marketCode,
             String clientOrderId,
             OrderSide orderSide,
             OrderType orderType,
@@ -38,6 +40,7 @@ public sealed interface CommandMessage permits CommandMessage.Place, CommandMess
             Long commandLogId,
             Long userId,
             Long marketId,
+            String marketCode,
             String clientOrderId,
             String cancelReason
     ) implements CommandMessage {

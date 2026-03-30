@@ -39,7 +39,7 @@ public class Market extends BaseEntity {
     @JoinColumn(name = "quote_asset_id", nullable = false)
     private Asset quoteAsset;
 
-    @Column(name = "market_code", nullable = false, length = 20)
+    @Column(name = "market_code", nullable = false, length = 21)
     private String marketCode;
 
     @Enumerated(EnumType.STRING)
@@ -65,7 +65,7 @@ public class Market extends BaseEntity {
     private Market(CreateCommand command) {
         this.baseAsset = command.baseAsset();
         this.quoteAsset = command.quoteAsset();
-        this.marketCode = command.marketCode();
+        this.marketCode = generateMarketCode(command.baseAsset(), command.quoteAsset());
         this.status = (command.status() == null) ? EnumStatus.ACTIVE : command.status();
         this.minOrderQuote = new NonNegativeAmount(command.minOrderQuote()).value();
         this.tickSize = new PositiveAmount(command.tickSize()).value();
@@ -74,7 +74,6 @@ public class Market extends BaseEntity {
     public record CreateCommand(
             Asset baseAsset,
             Asset quoteAsset,
-            String marketCode,
             EnumStatus status,
             BigDecimal minOrderQuote,
             BigDecimal tickSize
@@ -86,11 +85,24 @@ public class Market extends BaseEntity {
         if (command == null
                 || command.baseAsset() == null
                 || command.quoteAsset() == null
-                || command.marketCode() == null
-                || command.marketCode().isBlank()
                 || command.minOrderQuote() == null
                 || command.tickSize() == null) {
             throw new BusinessException(ErrorCode.INVALID_MARKET_INPUT);
         }
+    }
+
+    private static String generateMarketCode(Asset baseAsset, Asset quoteAsset) {
+        String baseSymbol = baseAsset.getSymbol();
+        String quoteSymbol = quoteAsset.getSymbol();
+        if (baseSymbol == null || baseSymbol.isBlank() || quoteSymbol == null || quoteSymbol.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_MARKET_INPUT);
+        }
+
+        String marketCode = quoteSymbol + "-" + baseSymbol;
+
+        if (marketCode.length() > 21) {
+            throw new BusinessException(ErrorCode.INVALID_MARKET_INPUT);
+        }
+        return marketCode;
     }
 }

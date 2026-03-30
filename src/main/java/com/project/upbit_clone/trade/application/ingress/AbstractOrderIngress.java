@@ -83,15 +83,16 @@ abstract class AbstractOrderIngress<C extends OrderCommand> {
             return resolveIdempotencyHit(recovered.get(), requestHash);
         }
         try {
-            commandDispatcher.dispatch(toCommandMessage(saved.getId(), command));
+            commandDispatcher.dispatch(toCommandMessage(saved.getId(), command, market.getMarketCode()));
         } catch (RuntimeException exception) {
             // dispatch 실패 로거
             log.error(
-                    "Append 후 command dispatch를 실패했습니다. commandLogId={}, commandType={}, userId={}, marketId={}, clientOrderId={}",
+                    "Append 후 command dispatch를 실패했습니다. commandLogId={}, commandType={}, userId={}, marketId={}, marketCode={}, clientOrderId={}",
                     saved.getId(),
                     command.commandType(),
                     command.userId(),
                     command.marketId(),
+                    market.getMarketCode(),
                     command.clientOrderId(),
                     exception
             );
@@ -102,7 +103,7 @@ abstract class AbstractOrderIngress<C extends OrderCommand> {
     protected void validateBusiness(C command, Market market, User user) {
     }
 
-    protected abstract CommandMessage toCommandMessage(Long commandLogId, C command);
+    protected abstract CommandMessage toCommandMessage(Long commandLogId, C command, String marketCode);
 
     // 최소 검증
     private void validateInput(OrderCommand command) {

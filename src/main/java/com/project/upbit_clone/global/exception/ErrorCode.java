@@ -11,7 +11,6 @@ public enum ErrorCode {
     // in memory order book
     INVALID_ORDER_BOOK_INPUT("M01", "유효하지 않은 오더북 입력입니다. ", HttpStatus.BAD_REQUEST),
 
-
     // order book projection
     INVALID_ORDER_BOOK_PROJECTION_INPUT("L01", "유효하지 않은 오더북 프로젝션 입력입니다.", HttpStatus.BAD_REQUEST),
     NEGATIVE_ORDER_COUNT_NOT_ALLOWED("L02", "주문 카운트는 0 미만일 수 없습니다.", HttpStatus.BAD_REQUEST),

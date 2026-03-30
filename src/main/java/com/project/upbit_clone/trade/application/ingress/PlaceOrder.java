@@ -77,11 +77,12 @@ public class PlaceOrder extends AbstractOrderIngress<PlaceOrder.Command> {
     }
 
     @Override
-    protected CommandMessage toCommandMessage(Long commandLogId, Command command) {
+    protected CommandMessage toCommandMessage(Long commandLogId, Command command, String marketCode) {
         return new CommandMessage.Place(
                 commandLogId,
                 command.userId(),
                 command.marketId(),
+                marketCode,
                 command.clientOrderId(),
                 command.orderSide(),
                 command.orderType(),

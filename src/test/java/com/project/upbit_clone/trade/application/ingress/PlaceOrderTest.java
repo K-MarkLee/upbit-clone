@@ -319,7 +319,6 @@ class PlaceOrderTest {
         return Market.create(new Market.CreateCommand(
                 base,
                 quote,
-                "KRW-BTC",
                 status,
                 new BigDecimal("5000"),
                 new BigDecimal("1000")

@@ -53,6 +53,7 @@ class MarketWorkerTest {
                 1L,
                 10L,
                 200L,
+                "KRW-ETH",
                 "cid-1",
                 OrderSide.BID,
                 OrderType.LIMIT,
@@ -69,6 +70,27 @@ class MarketWorkerTest {
     }
 
     @Test
+    @DisplayName("Negative : 같은 marketId라도 다른 marketCode 메시지는 적재할 수 없다.")
+    void reject_message_with_different_market_code() {
+        // given
+        marketWorker.enqueue(validLimitPlaceMessage());
+
+        CommandMessage.Cancel message = new CommandMessage.Cancel(
+                2L,
+                10L,
+                100L,
+                "KRW-ETH",
+                "cid-2",
+                null
+        );
+
+        // when & then
+        assertThatThrownBy(() -> marketWorker.enqueue(message))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("message의 marketCode가 worker의 marketCode와 다릅니다.");
+    }
+
+    @Test
     @DisplayName("Negative : limit 주문은 price와 quantity가 모두 필요하다.")
     void reject_limit_order_without_required_fields() {
         // given
@@ -76,6 +98,7 @@ class MarketWorkerTest {
                 1L,
                 10L,
                 100L,
+                "KRW-BTC",
                 "cid-1",
                 OrderSide.BID,
                 OrderType.LIMIT,
@@ -99,6 +122,7 @@ class MarketWorkerTest {
                 1L,
                 10L,
                 100L,
+                "KRW-BTC",
                 "cid-1",
                 OrderSide.BID,
                 OrderType.MARKET,
@@ -122,6 +146,7 @@ class MarketWorkerTest {
                 2L,
                 10L,
                 100L,
+                "KRW-BTC",
                 " ",
                 null
         );
@@ -137,6 +162,7 @@ class MarketWorkerTest {
                 1L,
                 10L,
                 100L,
+                "KRW-BTC",
                 "cid-1",
                 OrderSide.BID,
                 OrderType.LIMIT,
