@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DisplayName("MarketWorkerManager 단위 테스트")
 class MarketWorkerManagerTest {
@@ -65,8 +66,7 @@ class MarketWorkerManagerTest {
 
     @AfterEach
     void tearDown() {
-        shutdownWorker(BTC_MARKET_ID);
-        shutdownWorker(ETH_MARKET_ID);
+        marketWorkerManager.shutdownAll();
     }
 
     @Test
@@ -107,10 +107,37 @@ class MarketWorkerManagerTest {
         assertThat(ethWorker.isRunning()).isTrue();
     }
 
-    private void shutdownWorker(Long marketId) {
-        MarketWorker worker = marketWorkerManager.workerFor(marketId);
-        if (worker != null) {
-            worker.shutdown();
-        }
+    @Test
+    @DisplayName("shutdownAll은 worker를 종료하고 제거한다.")
+    void shutdownAll_stops_and_clears_workers() {
+        // given
+        marketWorkerManager.submit(btcPlaceMessage);
+        marketWorkerManager.submit(ethPlaceMessage);
+        MarketWorker btcWorker = marketWorkerManager.workerFor(BTC_MARKET_ID);
+        MarketWorker ethWorker = marketWorkerManager.workerFor(ETH_MARKET_ID);
+
+        // when
+        marketWorkerManager.shutdownAll();
+
+        // then
+        assertThat(btcWorker).isNotNull();
+        assertThat(ethWorker).isNotNull();
+        assertThat(btcWorker.isRunning()).isFalse();
+        assertThat(ethWorker.isRunning()).isFalse();
+        assertThat(marketWorkerManager.workerCount()).isZero();
+        assertThat(marketWorkerManager.workerFor(BTC_MARKET_ID)).isNull();
+        assertThat(marketWorkerManager.workerFor(ETH_MARKET_ID)).isNull();
+    }
+
+    @Test
+    @DisplayName("shutdownAll 이후에는 새 메시지를 받지 않는다.")
+    void submit_rejects_when_manager_is_shutdown() {
+        // given
+        marketWorkerManager.shutdownAll();
+
+        // when & then
+        assertThatThrownBy(() -> marketWorkerManager.submit(btcPlaceMessage))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("MarketWorkerManager는 종료 중이거나 종료되었습니다.");
     }
 }

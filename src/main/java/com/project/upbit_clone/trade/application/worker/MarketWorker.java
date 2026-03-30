@@ -30,7 +30,7 @@ public class MarketWorker {
         }
 
         running = true;
-        workerThread = Thread.ofPlatform()
+        workerThread = Thread.ofVirtual()
                 .name("market-worker-" + marketId)
                 .start(this::runLoop);
     }
@@ -126,7 +126,7 @@ public class MarketWorker {
         }
     }
 
-    // place검증
+    // place 검증
     private void validatePlace(CommandMessage.Place message) {
         if (message.orderSide() == null || message.orderType() == null) {
             throw new IllegalArgumentException("place message 필수값이 누락되어 있습니다.");
