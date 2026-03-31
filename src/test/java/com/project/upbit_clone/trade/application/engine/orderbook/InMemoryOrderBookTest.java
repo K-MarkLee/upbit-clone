@@ -40,6 +40,28 @@ class InMemoryOrderBookTest {
     }
 
     @Test
+    @DisplayName("Happy : previewAdd는 delta만 계산하고 오더북 상태는 변경하지 않는다.")
+    void preview_add_returns_delta_without_mutating_order_book() {
+        InMemoryOrderBook orderBook = new InMemoryOrderBook();
+        BookOrderEntry entry = BookOrderEntry.create(
+                101L,
+                OrderSide.BID,
+                new BigDecimal("50000"),
+                new BigDecimal("1.25")
+        );
+
+        InMemoryOrderBook.LevelDelta delta = orderBook.previewAdd(entry);
+
+        assertThat(delta.before().totalQty()).isEqualByComparingTo("0");
+        assertThat(delta.before().orderCount()).isZero();
+        assertThat(delta.after().totalQty()).isEqualByComparingTo("1.25");
+        assertThat(delta.after().orderCount()).isEqualTo(1);
+        assertThat(orderBook.getBestBid()).isEmpty();
+        assertThat(orderBook.findOrder(101L)).isEmpty();
+        assertThat(orderBook.getLevelSnapshot(OrderSide.BID, new BigDecimal("50000"))).isEmpty();
+    }
+
+    @Test
     @DisplayName("Happy : 같은 가격 주문은 FIFO 순서로 누적된다.")
     void keep_fifo_order_at_same_price_level() {
         PriceLevel level = PriceLevel.create(OrderSide.BID, new BigDecimal("50000"));
