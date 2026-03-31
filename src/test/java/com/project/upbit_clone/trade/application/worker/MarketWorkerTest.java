@@ -1,14 +1,19 @@
 package com.project.upbit_clone.trade.application.worker;
 
 import com.project.upbit_clone.trade.application.dispatch.CommandMessage;
+import com.project.upbit_clone.trade.application.engine.EngineResult;
+import com.project.upbit_clone.trade.application.engine.MatchingEngineCore;
 import com.project.upbit_clone.trade.domain.vo.OrderSide;
 import com.project.upbit_clone.trade.domain.vo.OrderType;
 import com.project.upbit_clone.trade.domain.vo.TimeInForce;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -20,7 +25,12 @@ class MarketWorkerTest {
 
     @BeforeEach
     void setUp() {
-        marketWorker = new MarketWorker(100L);
+        marketWorker = new MarketWorker(100L, new MatchingEngineCore());
+    }
+
+    @AfterEach
+    void tearDown() {
+        marketWorker.shutdown();
     }
 
     @Test
@@ -157,6 +167,23 @@ class MarketWorkerTest {
                 .hasMessage("message 필수값이 누락되어 있습니다.");
     }
 
+    @Test
+    @DisplayName("Happy : worker가 place 메시지를 consume하면 matching engine을 호출한다.")
+    void worker_invokes_matching_engine_when_place_message_is_consumed() throws InterruptedException {
+        // given
+        CapturingMatchingEngineCore matchingEngineCore = new CapturingMatchingEngineCore();
+        marketWorker = new MarketWorker(100L, matchingEngineCore);
+        CommandMessage.Place message = validLimitPlaceMessage();
+
+        // when
+        marketWorker.start();
+        marketWorker.enqueue(message);
+
+        // then
+        assertThat(matchingEngineCore.awaitInvocation()).isTrue();
+        assertThat(matchingEngineCore.lastMessage).isEqualTo(message);
+    }
+
     private CommandMessage.Place validLimitPlaceMessage() {
         return new CommandMessage.Place(
                 1L,
@@ -171,5 +198,24 @@ class MarketWorkerTest {
                 new BigDecimal("1"),
                 null
         );
+    }
+
+    private static final class CapturingMatchingEngineCore extends MatchingEngineCore {
+        private final CountDownLatch invocationLatch = new CountDownLatch(1);
+        private volatile CommandMessage.Place lastMessage;
+
+        @Override
+        public EngineResult.PlaceResult place(
+                CommandMessage.Place message,
+                com.project.upbit_clone.trade.application.engine.orderbook.InMemoryOrderBook orderBook
+        ) {
+            this.lastMessage = message;
+            invocationLatch.countDown();
+            return EngineResult.PlaceResult.open(message.quantity());
+        }
+
+        boolean awaitInvocation() throws InterruptedException {
+            return invocationLatch.await(1, TimeUnit.SECONDS);
+        }
     }
 }
