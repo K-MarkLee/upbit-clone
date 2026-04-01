@@ -162,20 +162,32 @@ public class InMemoryOrderBook {
         return side == OrderSide.BID ? bidLevels : askLevels;
     }
 
+    // side 에 맞는 최우선 가격 레벨을 반환한다.
+    private Optional<PriceLevel> bestLevel(NavigableMap<BigDecimal, PriceLevel> levels) {
+        return Optional.ofNullable(levels.isEmpty() ? null : levels.firstEntry().getValue());
+    }
+
     // 최우선 매수 호가 조회
     public Optional<PriceLevel.Snapshot> getBestBid() {
-        return bestSnapshot(bidLevels);
+        return bestLevel(bidLevels).map(PriceLevel::snapshot);
     }
 
     // 최우선 매도 호가 조회
     public Optional<PriceLevel.Snapshot> getBestAsk() {
-        return bestSnapshot(askLevels);
+        return bestLevel(askLevels).map(PriceLevel::snapshot);
     }
 
-    // side 에 맞는 최우선 가격 레벨 스냅샷을 반환한다.
-    private Optional<PriceLevel.Snapshot> bestSnapshot(NavigableMap<BigDecimal, PriceLevel> levels) {
-        return Optional.ofNullable(levels.isEmpty() ? null : levels.firstEntry().getValue().snapshot());
+    // 최우선 매수 호가의 선두 주문 조회
+    public Optional<BookOrderEntry> getBestBidHead() {
+        return bestLevel(bidLevels).map(PriceLevel::peekFirst);
     }
+
+    // 최우선 매도 호가의 선두 주문 조회
+    public Optional<BookOrderEntry> getBestAskHead() {
+        return bestLevel(askLevels).map(PriceLevel::peekFirst);
+    }
+
+
 
     // 특정 가격 레벨 스냅샷 조회
     public Optional<PriceLevel.Snapshot> getLevelSnapshot(OrderSide side, BigDecimal price) {

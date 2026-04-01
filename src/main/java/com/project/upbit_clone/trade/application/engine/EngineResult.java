@@ -62,6 +62,24 @@ public final class EngineResult {
             );
         }
 
+        public static PlaceResult filled(
+                BigDecimal executedQuantity,
+                BigDecimal executedQuoteAmount,
+                List<Fill> fills,
+                List<BookDelta> bookDeltas
+        ) {
+            return new PlaceResult(
+                    OrderStatus.FILLED,
+                    executedQuantity,
+                    executedQuoteAmount,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    null,
+                    fills,
+                    bookDeltas
+            );
+        }
+
         public static PlaceResult canceled(
                 BigDecimal remainingQuantity,
                 BigDecimal unlockAmount,

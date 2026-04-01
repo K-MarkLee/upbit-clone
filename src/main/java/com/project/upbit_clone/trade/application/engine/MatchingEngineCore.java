@@ -9,6 +9,7 @@ import com.project.upbit_clone.trade.domain.vo.OrderType;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -19,23 +20,23 @@ public class MatchingEngineCore {
         Objects.requireNonNull(message, "message는 null일 수 없습니다.");
         Objects.requireNonNull(orderBook, "orderBook은 null일 수 없습니다.");
 
-        Optional<PriceLevel.Snapshot> bestOppositeLevel = findBestOppositeLevel(message, orderBook);
+        Optional<BookOrderEntry> bestOppositeHead = findBestOppositeHead(message, orderBook);
         // taker 비었거나, 매칭되는 가격없을경우 handleNoMatch 반환.
-        if (bestOppositeLevel.isEmpty() || !isPriceCrossed(message, bestOppositeLevel.get().price())) {
+        if (bestOppositeHead.isEmpty() || !isPriceCrossed(message, bestOppositeHead.get().getPrice())) {
             return handleNoMatch(message, orderBook);
         }
 
-        throw new EngineException("실제 매칭 루프는 아직 구현되지 않았습니다.");
+        return handleSingleMakerFilled(message, bestOppositeHead.get(), orderBook);
     }
 
-    // maker 최적가격 찾기.
-    private Optional<PriceLevel.Snapshot> findBestOppositeLevel(
+    // maker 최적가격의 선두 주문 찾기.
+    private Optional<BookOrderEntry> findBestOppositeHead(
             CommandMessage.Place message,
             InMemoryOrderBook orderBook
     ) {
         return message.orderSide() == OrderSide.BID
-                ? orderBook.getBestAsk()
-                : orderBook.getBestBid();
+                ? orderBook.getBestAskHead()
+                : orderBook.getBestBidHead();
     }
 
     private boolean isPriceCrossed(CommandMessage.Place message, BigDecimal oppositeBestPrice) {
@@ -49,6 +50,99 @@ public class MatchingEngineCore {
                 ? message.price().compareTo(oppositeBestPrice) >= 0
                 // 매도면 판매가 보다 best price가 더 비싸야함.
                 : message.price().compareTo(oppositeBestPrice) <= 0;
+    }
+
+    // 단일 maker 전량 체결
+    private EngineResult.PlaceResult handleSingleMakerFilled(
+            CommandMessage.Place message,
+            BookOrderEntry makerHead,
+            InMemoryOrderBook orderBook
+    ) {
+        // executed 계산
+        BigDecimal takerRemainingQuantity = requireTakerQuantity(message);
+        BigDecimal executedQuantity = takerRemainingQuantity.min(makerHead.getRemainingQty());
+        BigDecimal executedQuoteAmount = makerHead.getPrice().multiply(executedQuantity);
+        BigDecimal makerRemainingQuantityAfter = makerHead.getRemainingQty().subtract(executedQuantity);
+        BigDecimal takerRemainingQuantityAfter = takerRemainingQuantity.subtract(executedQuantity);
+
+        if (takerRemainingQuantityAfter.compareTo(BigDecimal.ZERO) > 0) {
+            throw new EngineException("단일 maker 전량체결(S2) 범위를 벗어났습니다.");
+        }
+
+        // before price level 찾기
+        PriceLevel.Snapshot before = orderBook.getLevelSnapshot(makerHead.getSide(), makerHead.getPrice())
+                .orElseThrow(() -> new EngineException("maker price level snapshot을 찾을 수 없습니다."));
+
+        EngineResult.Fill fill = new EngineResult.Fill(
+                makerHead.getOrderId(),
+                makerHead.getPrice(),
+                executedQuantity,
+                executedQuoteAmount,
+                makerRemainingQuantityAfter
+        );
+
+        EngineResult.BookDelta bookDelta = createMatchExecutedDelta(
+                before,
+                makerHead,
+                executedQuantity,
+                makerRemainingQuantityAfter
+        );
+
+        EngineResult.PlaceResult result = EngineResult.PlaceResult.filled(
+                executedQuantity,
+                executedQuoteAmount,
+                List.of(fill),
+                List.of(bookDelta)
+        );
+
+        orderBook.applyExecution(makerHead.getSide(), makerHead.getPrice(), executedQuantity);
+        return result;
+    }
+
+    private BigDecimal requireTakerQuantity(CommandMessage.Place message) {
+        if (message.quantity() == null) {
+            throw new EngineException("현재 S2는 quantity 기반 주문만 지원합니다.");
+        }
+        return message.quantity();
+    }
+
+    // 북델타 생성
+    private EngineResult.BookDelta createMatchExecutedDelta(
+            PriceLevel.Snapshot before,
+            BookOrderEntry makerHead,
+            BigDecimal executedQuantity,
+            BigDecimal makerRemainingQuantityAfter
+    ) {
+        return new EngineResult.BookDelta(
+                new InMemoryOrderBook.LevelDelta(
+                        makerHead.getSide(),
+                        makerHead.getPrice(),
+                        before,
+                        createAfterMatchSnapshot(before, makerHead, executedQuantity, makerRemainingQuantityAfter)
+                ),
+                EngineResult.BookDeltaReason.MATCH_EXECUTED
+        );
+    }
+
+    // after level delta생성
+    private PriceLevel.Snapshot createAfterMatchSnapshot(
+            PriceLevel.Snapshot before,
+            BookOrderEntry makerHead,
+            BigDecimal executedQuantity,
+            BigDecimal makerRemainingQuantityAfter
+    ) {
+        if (makerRemainingQuantityAfter.compareTo(BigDecimal.ZERO) == 0 && before.orderCount() == 1) {
+            return PriceLevel.emptySnapshot(makerHead.getSide(), makerHead.getPrice());
+        }
+
+        return new PriceLevel.Snapshot(
+                makerHead.getSide(),
+                makerHead.getPrice(),
+                before.totalQty().subtract(executedQuantity),
+                makerRemainingQuantityAfter.compareTo(BigDecimal.ZERO) == 0
+                        ? before.orderCount() - 1
+                        : before.orderCount()
+        );
     }
 
     // 전량 미체결
@@ -82,7 +176,7 @@ public class MatchingEngineCore {
         EngineResult.BookDelta bookDelta = createRestingOrderAddedDelta(orderBook, restingEntry);
         EngineResult.PlaceResult result = EngineResult.PlaceResult.open(
                 message.quantity(),
-                java.util.List.of(bookDelta)
+                List.of(bookDelta)
         );
 
         orderBook.add(restingEntry);

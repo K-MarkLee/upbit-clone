@@ -53,6 +53,41 @@ class EngineResultTest {
     }
 
     @Test
+    @DisplayName("Happy : filled 팩토리는 FILLED 상태와 체결 결과를 반환한다.")
+    void filled_factory_returns_filled_status_with_execution_values() {
+        // given
+        EngineResult.Fill fill = new EngineResult.Fill(
+                101L,
+                thousand,
+                one,
+                thousand,
+                BigDecimal.ZERO
+        );
+        EngineResult.BookDelta bookDelta = new EngineResult.BookDelta(
+                sampleLevelDelta(),
+                EngineResult.BookDeltaReason.MATCH_EXECUTED
+        );
+
+        // when
+        EngineResult.PlaceResult result = EngineResult.PlaceResult.filled(
+                one,
+                thousand,
+                List.of(fill),
+                List.of(bookDelta)
+        );
+
+        // then
+        assertThat(result.takerStatus()).isEqualTo(OrderStatus.FILLED);
+        assertThat(result.executedQuantity()).isEqualByComparingTo("1");
+        assertThat(result.executedQuoteAmount()).isEqualByComparingTo("1000");
+        assertThat(result.remainingQuantity()).isEqualByComparingTo("0");
+        assertThat(result.unlockAmount()).isEqualByComparingTo("0");
+        assertThat(result.cancelReason()).isNull();
+        assertThat(result.fills()).containsExactly(fill);
+        assertThat(result.bookDeltas()).containsExactly(bookDelta);
+    }
+
+    @Test
     @DisplayName("Happy : PlaceResult는 fills와 bookDeltas를 방어적으로 복사한다.")
     void place_result_defensively_copies_collections() {
         // given
