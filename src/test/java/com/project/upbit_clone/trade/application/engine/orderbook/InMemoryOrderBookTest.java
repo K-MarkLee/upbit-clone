@@ -124,6 +124,67 @@ class InMemoryOrderBookTest {
     }
 
     @Test
+    @DisplayName("Happy : best bid/ask head는 최우선 가격 레벨의 선두 주문을 반환한다.")
+    void track_best_head_order_by_side() {
+        InMemoryOrderBook orderBook = new InMemoryOrderBook();
+        BookOrderEntry bestBidHead = BookOrderEntry.create(
+                101L,
+                OrderSide.BID,
+                new BigDecimal("51000"),
+                new BigDecimal("1.0")
+        );
+        BookOrderEntry sameBestBidSecond = BookOrderEntry.create(
+                102L,
+                OrderSide.BID,
+                new BigDecimal("51000"),
+                new BigDecimal("2.0")
+        );
+        BookOrderEntry lowerBid = BookOrderEntry.create(
+                103L,
+                OrderSide.BID,
+                new BigDecimal("50000"),
+                new BigDecimal("3.0")
+        );
+        BookOrderEntry bestAskHead = BookOrderEntry.create(
+                201L,
+                OrderSide.ASK,
+                new BigDecimal("51500"),
+                new BigDecimal("1.0")
+        );
+        BookOrderEntry sameBestAskSecond = BookOrderEntry.create(
+                202L,
+                OrderSide.ASK,
+                new BigDecimal("51500"),
+                new BigDecimal("2.0")
+        );
+        BookOrderEntry higherAsk = BookOrderEntry.create(
+                203L,
+                OrderSide.ASK,
+                new BigDecimal("52000"),
+                new BigDecimal("3.0")
+        );
+
+        orderBook.add(lowerBid);
+        orderBook.add(bestBidHead);
+        orderBook.add(sameBestBidSecond);
+        orderBook.add(higherAsk);
+        orderBook.add(bestAskHead);
+        orderBook.add(sameBestAskSecond);
+
+        assertThat(orderBook.getBestBidHead()).contains(bestBidHead);
+        assertThat(orderBook.getBestAskHead()).contains(bestAskHead);
+    }
+
+    @Test
+    @DisplayName("Happy : 빈 오더북에서는 best bid/ask head가 비어 있다.")
+    void best_head_is_empty_when_order_book_is_empty() {
+        InMemoryOrderBook orderBook = new InMemoryOrderBook();
+
+        assertThat(orderBook.getBestBidHead()).isEmpty();
+        assertThat(orderBook.getBestAskHead()).isEmpty();
+    }
+
+    @Test
     @DisplayName("Happy : 마지막 주문을 제거하면 가격 레벨이 비워지고 북에서도 제거된다.")
     void remove_last_order_and_delete_price_level() {
         InMemoryOrderBook orderBook = new InMemoryOrderBook();

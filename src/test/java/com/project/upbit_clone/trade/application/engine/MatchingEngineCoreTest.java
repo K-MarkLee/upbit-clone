@@ -167,22 +167,125 @@ class MatchingEngineCoreTest {
         );
     }
 
-    @Test
-    @DisplayName("Negative : LIMIT GTC 주문이 가격 교차되면 무체결 OPEN 경로로 처리하지 않는다.")
-    void place_limit_gtc_with_crossed_price_throws_until_matching_loop_is_implemented() {
-        // given
-        InMemoryOrderBook orderBook = orderBookWithLevel(200L, OrderSide.ASK, "900", "1");
-        CommandMessage.Place message = createLimitPlaceMessage(
-                1L,
-                OrderSide.BID,
-                "1000",
-                "2"
-        );
+    @ParameterizedTest(name = "[{index}] {0}")
+    @MethodSource("limitGtcSingleMakerFilledCases")
+    @DisplayName("Happy : LIMIT GTC 주문이 단일 maker와 교차되면 FILLED 상태로 전량 체결된다.")
+    void place_limit_gtc_with_single_maker_returns_filled_and_consumes_best_level(
+            String caseName,
+            InMemoryOrderBook orderBook,
+            CommandMessage.Place message,
+            Long expectedMakerOrderId,
+            OrderSide expectedMatchedSide,
+            BigDecimal expectedMatchedPrice,
+            BigDecimal expectedExecutedQuantity,
+            BigDecimal expectedExecutedQuoteAmount,
+            BigDecimal expectedMakerRemainingQuantity,
+            BigDecimal expectedLevelAfterQuantity,
+            int expectedLevelAfterOrderCount
+    ) {
+        // when
+        EngineResult.PlaceResult result = matchingEngineCore.place(message, orderBook);
+        EngineResult.Fill fill = result.fills().getFirst();
+        EngineResult.BookDelta bookDelta = result.bookDeltas().getFirst();
+        InMemoryOrderBook.LevelDelta levelDelta = bookDelta.delta();
 
-        // when & then
-        assertThatThrownBy(() -> matchingEngineCore.place(message, orderBook))
-                .isInstanceOf(EngineException.class)
-                .hasMessage("실제 매칭 루프는 아직 구현되지 않았습니다.");
+        // then
+        assertThat(result.takerStatus()).isEqualTo(OrderStatus.FILLED);
+        assertThat(result.executedQuantity()).isEqualByComparingTo(expectedExecutedQuantity);
+        assertThat(result.executedQuoteAmount()).isEqualByComparingTo(expectedExecutedQuoteAmount);
+        assertThat(result.remainingQuantity()).isEqualByComparingTo("0");
+        assertThat(result.unlockAmount()).isEqualByComparingTo("0");
+        assertThat(result.cancelReason()).isNull();
+        assertThat(result.fills()).hasSize(1);
+        assertThat(fill.makerOrderId()).isEqualTo(expectedMakerOrderId);
+        assertThat(fill.price()).isEqualByComparingTo(expectedMatchedPrice);
+        assertThat(fill.executedQuantity()).isEqualByComparingTo(expectedExecutedQuantity);
+        assertThat(fill.executedQuoteAmount()).isEqualByComparingTo(expectedExecutedQuoteAmount);
+        assertThat(fill.makerRemainingQuantity()).isEqualByComparingTo(expectedMakerRemainingQuantity);
+        assertThat(result.bookDeltas()).hasSize(1);
+        assertThat(bookDelta.reason()).isEqualTo(EngineResult.BookDeltaReason.MATCH_EXECUTED);
+        assertThat(levelDelta.side()).isEqualTo(expectedMatchedSide);
+        assertThat(levelDelta.price()).isEqualByComparingTo(expectedMatchedPrice);
+        assertThat(levelDelta.before().totalQty()).isEqualByComparingTo(
+                expectedExecutedQuantity.add(expectedMakerRemainingQuantity)
+        );
+        assertThat(levelDelta.before().orderCount()).isEqualTo(1);
+        assertThat(levelDelta.after().totalQty()).isEqualByComparingTo(expectedLevelAfterQuantity);
+        assertThat(levelDelta.after().orderCount()).isEqualTo(expectedLevelAfterOrderCount);
+
+        if (expectedLevelAfterOrderCount == 0) {
+            assertThat(orderBook.getLevelSnapshot(expectedMatchedSide, expectedMatchedPrice)).isEmpty();
+            assertThat(orderBook.findOrder(expectedMakerOrderId)).isEmpty();
+            return;
+        }
+
+        PriceLevel.Snapshot remainingLevel = getRequiredLevelSnapshot(
+                orderBook,
+                expectedMatchedSide,
+                expectedMatchedPrice
+        );
+        assertThat(orderBook.findOrder(expectedMakerOrderId)).isPresent();
+        assertThat(orderBook.findOrder(expectedMakerOrderId).orElseThrow().getRemainingQty())
+                .isEqualByComparingTo(expectedMakerRemainingQuantity);
+        assertThat(remainingLevel.totalQty()).isEqualByComparingTo(expectedLevelAfterQuantity);
+        assertThat(remainingLevel.orderCount()).isEqualTo(expectedLevelAfterOrderCount);
+    }
+
+    private static Stream<Arguments> limitGtcSingleMakerFilledCases() {
+        return Stream.of(
+                Arguments.of(
+                        "BID LIMIT GTC는 단일 ASK maker와 교차되면 maker 가격으로 전량 체결된다.",
+                        orderBookWithLevel(301L, OrderSide.ASK, "900", "2"),
+                        createLimitPlaceMessage(11L, OrderSide.BID, "1000", "2"),
+                        301L,
+                        OrderSide.ASK,
+                        new BigDecimal("900"),
+                        new BigDecimal("2"),
+                        new BigDecimal("1800"),
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        0
+                ),
+                Arguments.of(
+                        "ASK LIMIT GTC는 단일 BID maker와 교차되면 maker 가격으로 전량 체결된다.",
+                        orderBookWithLevel(302L, OrderSide.BID, "1100", "2"),
+                        createLimitPlaceMessage(12L, OrderSide.ASK, "1000", "2"),
+                        302L,
+                        OrderSide.BID,
+                        new BigDecimal("1100"),
+                        new BigDecimal("2"),
+                        new BigDecimal("2200"),
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        0
+                ),
+                Arguments.of(
+                        "BID LIMIT GTC는 단일 ASK maker의 일부만 체결해도 taker가 종료되면 FILLED다.",
+                        orderBookWithLevel(303L, OrderSide.ASK, "900", "5"),
+                        createLimitPlaceMessage(13L, OrderSide.BID, "1000", "2"),
+                        303L,
+                        OrderSide.ASK,
+                        new BigDecimal("900"),
+                        new BigDecimal("2"),
+                        new BigDecimal("1800"),
+                        new BigDecimal("3"),
+                        new BigDecimal("3"),
+                        1
+                ),
+                Arguments.of(
+                        "ASK LIMIT GTC는 단일 BID maker의 일부만 체결해도 taker가 종료되면 FILLED다.",
+                        orderBookWithLevel(304L, OrderSide.BID, "1100", "5"),
+                        createLimitPlaceMessage(14L, OrderSide.ASK, "1000", "2"),
+                        304L,
+                        OrderSide.BID,
+                        new BigDecimal("1100"),
+                        new BigDecimal("2"),
+                        new BigDecimal("2200"),
+                        new BigDecimal("3"),
+                        new BigDecimal("3"),
+                        1
+                )
+        );
     }
 
 
