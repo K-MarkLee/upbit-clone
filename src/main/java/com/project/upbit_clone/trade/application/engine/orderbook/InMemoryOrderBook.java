@@ -29,29 +29,26 @@ public class InMemoryOrderBook {
         this.orderIndex = new HashMap<>();
     }
 
+    // 주문을 실제로 적재하지 않고 before/after delta만 미리 계산한다.
+    public LevelDelta previewAdd(BookOrderEntry entry) {
+        validateAddableEntry(entry);
+        return createAddDelta(entry);
+    }
+
     // 주문을 해당 가격 레벨에 적재하고 before/after delta를 반환한다.
     public LevelDelta add(BookOrderEntry entry) {
-        validateEntry(entry);
-        if (orderIndex.containsKey(entry.getOrderId())) {
-            throw new EngineException("중복된 orderId 입니다.: " + entry.getOrderId());
-        }
+        validateAddableEntry(entry);
+        LevelDelta delta = createAddDelta(entry);
 
         NavigableMap<BigDecimal, PriceLevel> levels = levels(entry.getSide());
-
-        // entry의 가격이 존재하지 않는다면 생성.
         PriceLevel level = levels.computeIfAbsent(
                 entry.getPrice(),
                 price -> PriceLevel.create(entry.getSide(), price)
         );
-
-        // 스냅샷을 남긴다.
-        PriceLevel.Snapshot before = level.snapshot();
         level.enqueue(entry);
-        PriceLevel.Snapshot after = level.snapshot();
-
         orderIndex.put(entry.getOrderId(), entry);
 
-        return new LevelDelta(entry.getSide(), entry.getPrice(), before, after);
+        return delta;
     }
 
     // 주문을 제거하고 비어 있는 가격 레벨은 함께 정리한다.
@@ -124,10 +121,27 @@ public class InMemoryOrderBook {
         return new LevelDelta(side, price, before, after);
     }
 
-    // add 전 엔트리 최소 검증.
-    private void validateEntry(BookOrderEntry entry) {
+    // before/after 계산.
+    private LevelDelta createAddDelta(BookOrderEntry entry) {
+        PriceLevel.Snapshot before = getLevelSnapshot(entry.getSide(), entry.getPrice())
+                .orElse(PriceLevel.emptySnapshot(entry.getSide(), entry.getPrice()));
+        PriceLevel.Snapshot after = new PriceLevel.Snapshot(
+                entry.getSide(),
+                entry.getPrice(),
+                before.totalQty().add(entry.getRemainingQty()),
+                before.orderCount() + 1
+        );
+
+        return new LevelDelta(entry.getSide(), entry.getPrice(), before, after);
+    }
+
+    // add/previewAdd 전 엔트리 최소 검증.
+    private void validateAddableEntry(BookOrderEntry entry) {
         if (entry == null || entry.getSide() == null || entry.getPrice() == null || entry.getRemainingQty() == null) {
             throw new BusinessException(ErrorCode.INVALID_ORDER_BOOK_INPUT);
+        }
+        if (orderIndex.containsKey(entry.getOrderId())) {
+            throw new EngineException("중복된 orderId 입니다.: " + entry.getOrderId());
         }
         if (entry.getRemainingQty().compareTo(BigDecimal.ZERO) <= 0) {
             throw new EngineException("체결된 entry는 오더북에 추가될 수 없습니다.: " + entry.getOrderId());
