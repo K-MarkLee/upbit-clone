@@ -22,6 +22,7 @@ public sealed interface CommandMessage permits CommandMessage.Place, CommandMess
             Long marketId,
             String marketCode,
             String clientOrderId,
+            String orderKey,
             OrderSide orderSide,
             OrderType orderType,
             TimeInForce timeInForce,
@@ -42,6 +43,7 @@ public sealed interface CommandMessage permits CommandMessage.Place, CommandMess
             Long marketId,
             String marketCode,
             String clientOrderId,
+            String targetOrderKey,
             String cancelReason
     ) implements CommandMessage {
 

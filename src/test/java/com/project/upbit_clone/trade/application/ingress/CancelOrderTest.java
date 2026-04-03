@@ -123,6 +123,50 @@ class CancelOrderTest {
         verify(commandDispatcher).dispatch(any(CommandMessage.class));
     }
 
+    @Test
+    @DisplayName("Happy : cancel dispatch message는 원 place commandId를 targetOrderKey로 전달한다.")
+    void handle_dispatches_cancel_message_with_target_order_key_from_place_command_id() {
+        // given
+        CancelOrder.Command command = validCommand();
+        User activeUser = User.create("u@test.com", "user", EnumStatus.ACTIVE, "pw");
+        Market activeMarket = createMarket(EnumStatus.ACTIVE);
+        CommandLog placeLog = CommandLog.create(new CommandLog.CreateCommand(
+                "place-1",
+                CommandType.PLACE_ORDER,
+                1L,
+                1L,
+                "cid-1",
+                "{\"order\":\"place\"}",
+                "hash-place"
+        ));
+
+        when(idempotencyHitService.find(1L, "cid-1", CommandType.CANCEL_ORDER))
+                .thenReturn(Optional.empty());
+        when(userRepository.findById(1L)).thenReturn(Optional.of(activeUser));
+        when(marketRepository.findWithAssetsById(1L)).thenReturn(Optional.of(activeMarket));
+        when(commandLogRepository.findByUserIdAndClientOrderIdAndCommandType(1L, "cid-1", CommandType.PLACE_ORDER))
+                .thenReturn(Optional.of(placeLog));
+        when(commandLogAppendService.append(any(CommandLog.class)))
+                .thenAnswer(invocation -> {
+                    CommandLog log = invocation.getArgument(0);
+                    setCommandLogId(log);
+                    return log;
+                });
+
+        // when
+        cancelOrder.handle(command);
+
+        // then
+        ArgumentCaptor<CommandMessage> messageCaptor = ArgumentCaptor.forClass(CommandMessage.class);
+        verify(commandDispatcher).dispatch(messageCaptor.capture());
+
+        assertThat(messageCaptor.getValue()).isInstanceOf(CommandMessage.Cancel.class);
+        CommandMessage.Cancel dispatched = (CommandMessage.Cancel) messageCaptor.getValue();
+        assertThat(dispatched.commandLogId()).isEqualTo(200L);
+        assertThat(dispatched.clientOrderId()).isEqualTo(command.clientOrderId());
+        assertThat(dispatched.targetOrderKey()).isEqualTo(placeLog.getCommandId());
+    }
+
     @ParameterizedTest(name = "[{index}] {0}")
     @MethodSource("missingRequiredInputs")
     @DisplayName("Negative : 필수 입력값 누락이면 BusinessException을 반환한다.")

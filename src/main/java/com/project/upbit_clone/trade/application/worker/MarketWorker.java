@@ -110,6 +110,15 @@ public class MarketWorker {
     }
 
     private void handleCancel(CommandMessage.Cancel message) {
+        boolean removed = orderBook.remove(message.targetOrderKey()).isPresent();
+        log.debug(
+                "주문(cancel) 처리 결과: marketId={}, marketCode={}, commandLogId={}, targetOrderKey={}, removed={}",
+                marketId,
+                marketCode,
+                message.commandLogId(),
+                message.targetOrderKey(),
+                removed
+        );
     }
 
     private synchronized void bindMarketCode(String marketCode) {
@@ -140,12 +149,19 @@ public class MarketWorker {
         // limit 과 market에 따른 검증
         if (message instanceof CommandMessage.Place place) {
             validatePlace(place);
+            return;
+        }
+        if (message instanceof CommandMessage.Cancel cancel) {
+            validateCancel(cancel);
         }
     }
 
     // place 검증
     private void validatePlace(CommandMessage.Place message) {
-        if (message.orderSide() == null || message.orderType() == null) {
+        if (message.orderKey() == null
+                || message.orderKey().isBlank()
+                || message.orderSide() == null
+                || message.orderType() == null) {
             throw new IllegalArgumentException("place message 필수값이 누락되어 있습니다.");
         }
 
@@ -167,6 +183,12 @@ public class MarketWorker {
         }
 
         throw new IllegalArgumentException("지원하지 않는 orderType 입니다.");
+    }
+
+    private void validateCancel(CommandMessage.Cancel message) {
+        if (message.targetOrderKey() == null || message.targetOrderKey().isBlank()) {
+            throw new IllegalArgumentException("cancel message 필수값이 누락되어 있습니다.");
+        }
     }
 
     Long marketId() {

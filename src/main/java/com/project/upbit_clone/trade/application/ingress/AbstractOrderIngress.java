@@ -64,9 +64,10 @@ abstract class AbstractOrderIngress<C extends OrderCommand> {
 
         User user = validateAndGetUser(command.userId());
         Market market = validateAndGetMarket(command.marketId());
-        validateBusiness(command, market, user);
+        String commandId = UUID.randomUUID().toString();
+        validateBusiness(command, market, user, commandId);
 
-        CommandLog commandLog = createCommandLog(command, requestHash);
+        CommandLog commandLog = createCommandLog(command, requestHash, commandId);
         CommandLog saved;
         try {
             saved = commandLogAppendService.append(commandLog);
@@ -83,7 +84,7 @@ abstract class AbstractOrderIngress<C extends OrderCommand> {
             return resolveIdempotencyHit(recovered.get(), requestHash);
         }
         try {
-            commandDispatcher.dispatch(toCommandMessage(saved.getId(), command, market.getMarketCode()));
+            commandDispatcher.dispatch(toCommandMessage(saved.getId(), commandId, command, market.getMarketCode()));
         } catch (RuntimeException exception) {
             // dispatch 실패 로거
             log.error(
@@ -100,10 +101,9 @@ abstract class AbstractOrderIngress<C extends OrderCommand> {
         return CommandAck.accepted(saved, false);
     }
 
-    protected void validateBusiness(C command, Market market, User user) {
-    }
+    protected abstract void validateBusiness(C command, Market market, User user, String commandId);
 
-    protected abstract CommandMessage toCommandMessage(Long commandLogId, C command, String marketCode);
+    protected abstract CommandMessage toCommandMessage(Long commandLogId, String commandId, C command, String marketCode);
 
     // 최소 검증
     private void validateInput(OrderCommand command) {
@@ -137,8 +137,7 @@ abstract class AbstractOrderIngress<C extends OrderCommand> {
     }
 
     // 커맨드 로그 생성 (주문 생성 : CREATE, CANCEL)
-    private CommandLog createCommandLog(OrderCommand command, String requestHash) {
-        String commandId = UUID.randomUUID().toString();
+    private CommandLog createCommandLog(OrderCommand command, String requestHash, String commandId) {
         return CommandLog.create(new CommandLog.CreateCommand(
                 commandId,
                 command.commandType(),

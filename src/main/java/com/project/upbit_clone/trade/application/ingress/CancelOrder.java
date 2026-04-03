@@ -14,8 +14,6 @@ import com.project.upbit_clone.user.domain.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.json.JsonMapper;
 
-import java.util.Optional;
-
 @Service
 public class CancelOrder extends AbstractOrderIngress<CancelOrder.Command> {
 
@@ -60,30 +58,35 @@ public class CancelOrder extends AbstractOrderIngress<CancelOrder.Command> {
     }
 
     @Override
-    protected void validateBusiness(Command command, Market market, User user) {
-        Optional<CommandLog> placeCommand = commandLogRepository
-                .findByUserIdAndClientOrderIdAndCommandType(
-                        command.userId(),
-                        command.clientOrderId(),
-                        CommandType.PLACE_ORDER
-                );
-        if (placeCommand.isEmpty()) {
-            throw new BusinessException(ErrorCode.ORDER_NOT_FOUND);
-        }
-        if (!command.marketId().equals(placeCommand.get().getMarketId())) {
+    protected void validateBusiness(Command command, Market market, User user, String commandId) {
+        CommandLog placeCommand = findRequiredPlaceCommand(command);
+        if (!command.marketId().equals(placeCommand.getMarketId())) {
             throw new BusinessException(ErrorCode.ORDER_NOT_FOUND);
         }
     }
 
     @Override
-    protected CommandMessage toCommandMessage(Long commandLogId, Command command, String marketCode) {
+    protected CommandMessage toCommandMessage(Long commandLogId, String commandId, Command command, String marketCode) {
+        CommandLog targetPlaceCommand = findRequiredPlaceCommand(command);
+
         return new CommandMessage.Cancel(
                 commandLogId,
                 command.userId(),
                 command.marketId(),
                 marketCode,
                 command.clientOrderId(),
+                targetPlaceCommand.getCommandId(),
                 command.cancelReason()
         );
+    }
+
+    private CommandLog findRequiredPlaceCommand(Command command) {
+        return commandLogRepository
+                .findByUserIdAndClientOrderIdAndCommandType(
+                        command.userId(),
+                        command.clientOrderId(),
+                        CommandType.PLACE_ORDER
+                )
+                .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
     }
 }

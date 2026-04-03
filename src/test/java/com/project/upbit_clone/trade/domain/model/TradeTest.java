@@ -53,6 +53,7 @@ class TradeTest {
         assertThat(trade.getMarket()).isEqualTo(market);
         assertThat(trade.getBuyOrder()).isEqualTo(buyOrder);
         assertThat(trade.getSellOrder()).isEqualTo(sellOrder);
+        assertThat(trade.getTradeKey()).startsWith("trade-key-");
         assertThat(trade.getMakerOrderSide()).isEqualTo(OrderSide.ASK);
         assertThat(trade.getPrice()).isEqualTo(new BigDecimal("10000"));
         assertThat(trade.getQuantity()).isEqualTo(BigDecimal.ONE);
@@ -101,6 +102,28 @@ class TradeTest {
         assertThat(trade.getPrice()).isEqualTo(buyOrder.getPrice());
     }
 
+    @Test
+    @DisplayName("Negative : trade_key가 64자를 초과하면 BusinessException을 반환한다.")
+    void create_trade_with_too_long_trade_key() {
+        Trade.CreateCommand command = new Trade.CreateCommand(
+                market,
+                buyOrder,
+                sellOrder,
+                "t".repeat(65),
+                OrderSide.ASK,
+                sellOrder.getPrice(),
+                BigDecimal.ONE,
+                new BigDecimal("10000"),
+                null,
+                null,
+                null
+        );
+
+        assertThatThrownBy(() -> Trade.create(command))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_TRADE_INPUT);
+    }
+
     @ParameterizedTest(name = "[{index}] {0}")
     @MethodSource("nullRequiredTradeCommands")
     @DisplayName("Negative : 필수 입력값이 null이면 BusinessException을 반환한다.")
@@ -115,33 +138,37 @@ class TradeTest {
         TradeFixture fixture = fixture();
         return Stream.of(
                 Arguments.of("command null", null),
+                Arguments.of("tradeKey null", new Trade.CreateCommand(
+                        fixture.market(), fixture.buyOrder(), fixture.sellOrder(), null, OrderSide.ASK,
+                        fixture.sellOrder().getPrice(), BigDecimal.ONE, new BigDecimal("10000"), null, null, null
+                )),
                 Arguments.of("market null", createCommand(
                         null, fixture.buyOrder(), fixture.sellOrder(), OrderSide.ASK, fixture.sellOrder().getPrice(),
                         BigDecimal.ONE, new BigDecimal("10000"), null, null, null
                 )),
-                Arguments.of("buyOrder null", createCommand(
-                        fixture.market(), null, fixture.sellOrder(), OrderSide.ASK, fixture.sellOrder().getPrice(),
-                        BigDecimal.ONE, new BigDecimal("10000"), null, null, null
+                Arguments.of("buyOrder null", new Trade.CreateCommand(
+                        fixture.market(), null, fixture.sellOrder(), "trade-key-buy-null", OrderSide.ASK,
+                        fixture.sellOrder().getPrice(), BigDecimal.ONE, new BigDecimal("10000"), null, null, null
                 )),
-                Arguments.of("sellOrder null", createCommand(
-                        fixture.market(), fixture.buyOrder(), null, OrderSide.ASK, fixture.sellOrder().getPrice(),
-                        BigDecimal.ONE, new BigDecimal("10000"), null, null, null
+                Arguments.of("sellOrder null", new Trade.CreateCommand(
+                        fixture.market(), fixture.buyOrder(), null, "trade-key-sell-null", OrderSide.ASK,
+                        fixture.sellOrder().getPrice(), BigDecimal.ONE, new BigDecimal("10000"), null, null, null
                 )),
-                Arguments.of("makerOrderSide null", createCommand(
-                        fixture.market(), fixture.buyOrder(), fixture.sellOrder(), null, fixture.sellOrder().getPrice(),
-                        BigDecimal.ONE, new BigDecimal("10000"), null, null, null
+                Arguments.of("makerOrderSide null", new Trade.CreateCommand(
+                        fixture.market(), fixture.buyOrder(), fixture.sellOrder(), "trade-key-maker-null", null,
+                        fixture.sellOrder().getPrice(), BigDecimal.ONE, new BigDecimal("10000"), null, null, null
                 )),
-                Arguments.of("price null", createCommand(
-                        fixture.market(), fixture.buyOrder(), fixture.sellOrder(), OrderSide.ASK, null, BigDecimal.ONE,
-                        new BigDecimal("10000"), null, null, null
+                Arguments.of("price null", new Trade.CreateCommand(
+                        fixture.market(), fixture.buyOrder(), fixture.sellOrder(), "trade-key-price-null", OrderSide.ASK,
+                        null, BigDecimal.ONE, new BigDecimal("10000"), null, null, null
                 )),
-                Arguments.of("quantity null", createCommand(
-                        fixture.market(), fixture.buyOrder(), fixture.sellOrder(), OrderSide.ASK, fixture.sellOrder().getPrice(),
-                        null, new BigDecimal("10000"), null, null, null
+                Arguments.of("quantity null", new Trade.CreateCommand(
+                        fixture.market(), fixture.buyOrder(), fixture.sellOrder(), "trade-key-quantity-null", OrderSide.ASK,
+                        fixture.sellOrder().getPrice(), null, new BigDecimal("10000"), null, null, null
                 )),
-                Arguments.of("quoteAmount null", createCommand(
-                        fixture.market(), fixture.buyOrder(), fixture.sellOrder(), OrderSide.ASK, fixture.sellOrder().getPrice(),
-                        BigDecimal.ONE, null, null, null, null
+                Arguments.of("quoteAmount null", new Trade.CreateCommand(
+                        fixture.market(), fixture.buyOrder(), fixture.sellOrder(), "trade-key-quote-null", OrderSide.ASK,
+                        fixture.sellOrder().getPrice(), BigDecimal.ONE, null, null, null, null
                 ))
         );
     }
@@ -399,7 +426,7 @@ class TradeTest {
             BigDecimal quantity
     ) {
         return Order.create(new Order.CreateCommand(
-                market, user, clientOrderId, OrderSide.BID, OrderType.LIMIT,
+                market, user, clientOrderId, nextOrderKey(clientOrderId), OrderSide.BID, OrderType.LIMIT,
                 null, price, quantity, null
         ));
     }
@@ -413,7 +440,7 @@ class TradeTest {
             BigDecimal quantity
     ) {
         return Order.create(new Order.CreateCommand(
-                market, user, clientOrderId, OrderSide.ASK, OrderType.LIMIT,
+                market, user, clientOrderId, nextOrderKey(clientOrderId), OrderSide.ASK, OrderType.LIMIT,
                 null, price, quantity, null
         ));
     }
@@ -432,8 +459,26 @@ class TradeTest {
             BigDecimal sellFeeAmount
     ) {
         return new Trade.CreateCommand(
-                market, buyOrder, sellOrder, makerOrderSide, price, quantity, quoteAmount, feeRate, buyFeeAmount, sellFeeAmount
+                market,
+                buyOrder,
+                sellOrder,
+                nextTradeKey(buyOrder.getClientOrderId(), sellOrder.getClientOrderId()),
+                makerOrderSide,
+                price,
+                quantity,
+                quoteAmount,
+                feeRate,
+                buyFeeAmount,
+                sellFeeAmount
         );
+    }
+
+    private static String nextOrderKey(String clientOrderId) {
+        return "order-key-" + clientOrderId;
+    }
+
+    private static String nextTradeKey(String buyClientOrderId, String sellClientOrderId) {
+        return "trade-key-" + buyClientOrderId + "-" + sellClientOrderId;
     }
 
     // 유저 헬퍼 (다른 이용자 id)
