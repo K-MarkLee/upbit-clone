@@ -19,7 +19,7 @@ class InMemoryOrderBookTest {
     void add_single_bid_order() {
         InMemoryOrderBook orderBook = new InMemoryOrderBook();
         BookOrderEntry entry = BookOrderEntry.create(
-                101L,
+                orderKey(101L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("1.25")
@@ -44,7 +44,7 @@ class InMemoryOrderBookTest {
     void preview_add_returns_delta_without_mutating_order_book() {
         InMemoryOrderBook orderBook = new InMemoryOrderBook();
         BookOrderEntry entry = BookOrderEntry.create(
-                101L,
+                orderKey(101L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("1.25")
@@ -57,7 +57,7 @@ class InMemoryOrderBookTest {
         assertThat(delta.after().totalQty()).isEqualByComparingTo("1.25");
         assertThat(delta.after().orderCount()).isEqualTo(1);
         assertThat(orderBook.getBestBid()).isEmpty();
-        assertThat(orderBook.findOrder(101L)).isEmpty();
+        assertThat(orderBook.findOrder(orderKey(101L))).isEmpty();
         assertThat(orderBook.getLevelSnapshot(OrderSide.BID, new BigDecimal("50000"))).isEmpty();
     }
 
@@ -66,13 +66,13 @@ class InMemoryOrderBookTest {
     void keep_fifo_order_at_same_price_level() {
         PriceLevel level = PriceLevel.create(OrderSide.BID, new BigDecimal("50000"));
         BookOrderEntry first = BookOrderEntry.create(
-                101L,
+                orderKey(101L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("1.0")
         );
         BookOrderEntry second = BookOrderEntry.create(
-                102L,
+                orderKey(102L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("2.0")
@@ -93,25 +93,25 @@ class InMemoryOrderBookTest {
         InMemoryOrderBook orderBook = new InMemoryOrderBook();
 
         orderBook.add(BookOrderEntry.create(
-                101L,
+                orderKey(101L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("1.0")
         ));
         orderBook.add(BookOrderEntry.create(
-                102L,
+                orderKey(102L),
                 OrderSide.BID,
                 new BigDecimal("51000"),
                 new BigDecimal("1.0")
         ));
         orderBook.add(BookOrderEntry.create(
-                201L,
+                orderKey(201L),
                 OrderSide.ASK,
                 new BigDecimal("52000"),
                 new BigDecimal("1.0")
         ));
         orderBook.add(BookOrderEntry.create(
-                202L,
+                orderKey(202L),
                 OrderSide.ASK,
                 new BigDecimal("51500"),
                 new BigDecimal("1.0")
@@ -128,37 +128,37 @@ class InMemoryOrderBookTest {
     void track_best_head_order_by_side() {
         InMemoryOrderBook orderBook = new InMemoryOrderBook();
         BookOrderEntry bestBidHead = BookOrderEntry.create(
-                101L,
+                orderKey(101L),
                 OrderSide.BID,
                 new BigDecimal("51000"),
                 new BigDecimal("1.0")
         );
         BookOrderEntry sameBestBidSecond = BookOrderEntry.create(
-                102L,
+                orderKey(102L),
                 OrderSide.BID,
                 new BigDecimal("51000"),
                 new BigDecimal("2.0")
         );
         BookOrderEntry lowerBid = BookOrderEntry.create(
-                103L,
+                orderKey(103L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("3.0")
         );
         BookOrderEntry bestAskHead = BookOrderEntry.create(
-                201L,
+                orderKey(201L),
                 OrderSide.ASK,
                 new BigDecimal("51500"),
                 new BigDecimal("1.0")
         );
         BookOrderEntry sameBestAskSecond = BookOrderEntry.create(
-                202L,
+                orderKey(202L),
                 OrderSide.ASK,
                 new BigDecimal("51500"),
                 new BigDecimal("2.0")
         );
         BookOrderEntry higherAsk = BookOrderEntry.create(
-                203L,
+                orderKey(203L),
                 OrderSide.ASK,
                 new BigDecimal("52000"),
                 new BigDecimal("3.0")
@@ -189,19 +189,19 @@ class InMemoryOrderBookTest {
     void remove_last_order_and_delete_price_level() {
         InMemoryOrderBook orderBook = new InMemoryOrderBook();
         orderBook.add(BookOrderEntry.create(
-                101L,
+                orderKey(101L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("1.0")
         ));
 
-        InMemoryOrderBook.LevelDelta delta = orderBook.remove(101L).orElseThrow();
+        InMemoryOrderBook.LevelDelta delta = orderBook.remove(orderKey(101L)).orElseThrow();
 
         assertThat(delta.before().totalQty()).isEqualByComparingTo("1.0");
         assertThat(delta.before().orderCount()).isEqualTo(1);
         assertThat(delta.after().totalQty()).isEqualByComparingTo("0");
         assertThat(delta.after().orderCount()).isZero();
-        assertThat(orderBook.findOrder(101L)).isEmpty();
+        assertThat(orderBook.findOrder(orderKey(101L))).isEmpty();
         assertThat(orderBook.getLevelSnapshot(OrderSide.BID, new BigDecimal("50000"))).isEmpty();
         assertThat(orderBook.getBestBid()).isEmpty();
     }
@@ -211,13 +211,13 @@ class InMemoryOrderBookTest {
     void apply_partial_execution_and_update_level_snapshot() {
         InMemoryOrderBook orderBook = new InMemoryOrderBook();
         orderBook.add(BookOrderEntry.create(
-                101L,
+                orderKey(101L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("10")
         ));
         orderBook.add(BookOrderEntry.create(
-                102L,
+                orderKey(102L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("5")
@@ -233,8 +233,8 @@ class InMemoryOrderBookTest {
         assertThat(delta.before().orderCount()).isEqualTo(2);
         assertThat(delta.after().totalQty()).isEqualByComparingTo("11");
         assertThat(delta.after().orderCount()).isEqualTo(2);
-        assertThat(orderBook.findOrder(101L)).isPresent();
-        assertThat(orderBook.findOrder(101L).orElseThrow().getRemainingQty()).isEqualByComparingTo("6");
+        assertThat(orderBook.findOrder(orderKey(101L))).isPresent();
+        assertThat(orderBook.findOrder(orderKey(101L)).orElseThrow().getRemainingQty()).isEqualByComparingTo("6");
         assertThat(orderBook.getLevelSnapshot(OrderSide.BID, new BigDecimal("50000"))).isPresent();
         assertThat(orderBook.getLevelSnapshot(OrderSide.BID, new BigDecimal("50000")).orElseThrow().totalQty())
                 .isEqualByComparingTo("11");
@@ -245,13 +245,13 @@ class InMemoryOrderBookTest {
     void remove_partially_filled_order_and_keep_correct_total_qty() {
         InMemoryOrderBook orderBook = new InMemoryOrderBook();
         orderBook.add(BookOrderEntry.create(
-                101L,
+                orderKey(101L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("10")
         ));
         orderBook.add(BookOrderEntry.create(
-                102L,
+                orderKey(102L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("5")
@@ -262,14 +262,14 @@ class InMemoryOrderBookTest {
                 new BigDecimal("50000"),
                 new BigDecimal("4")
         );
-        InMemoryOrderBook.LevelDelta delta = orderBook.remove(101L).orElseThrow();
+        InMemoryOrderBook.LevelDelta delta = orderBook.remove(orderKey(101L)).orElseThrow();
 
         assertThat(delta.before().totalQty()).isEqualByComparingTo("11");
         assertThat(delta.before().orderCount()).isEqualTo(2);
         assertThat(delta.after().totalQty()).isEqualByComparingTo("5");
         assertThat(delta.after().orderCount()).isEqualTo(1);
-        assertThat(orderBook.findOrder(101L)).isEmpty();
-        assertThat(orderBook.findOrder(102L)).isPresent();
+        assertThat(orderBook.findOrder(orderKey(101L))).isEmpty();
+        assertThat(orderBook.findOrder(orderKey(102L))).isPresent();
         assertThat(orderBook.getLevelSnapshot(OrderSide.BID, new BigDecimal("50000"))).isPresent();
         assertThat(orderBook.getLevelSnapshot(OrderSide.BID, new BigDecimal("50000")).orElseThrow().totalQty())
                 .isEqualByComparingTo("5");
@@ -280,7 +280,7 @@ class InMemoryOrderBookTest {
     void apply_full_execution_and_remove_last_order_from_book() {
         InMemoryOrderBook orderBook = new InMemoryOrderBook();
         orderBook.add(BookOrderEntry.create(
-                101L,
+                orderKey(101L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("10")
@@ -296,7 +296,7 @@ class InMemoryOrderBookTest {
         assertThat(delta.before().orderCount()).isEqualTo(1);
         assertThat(delta.after().totalQty()).isEqualByComparingTo("0");
         assertThat(delta.after().orderCount()).isZero();
-        assertThat(orderBook.findOrder(101L)).isEmpty();
+        assertThat(orderBook.findOrder(orderKey(101L))).isEmpty();
         assertThat(orderBook.getLevelSnapshot(OrderSide.BID, new BigDecimal("50000"))).isEmpty();
         assertThat(orderBook.getBestBid()).isEmpty();
     }
@@ -306,13 +306,13 @@ class InMemoryOrderBookTest {
     void apply_execution_to_head_order_only() {
         InMemoryOrderBook orderBook = new InMemoryOrderBook();
         orderBook.add(BookOrderEntry.create(
-                101L,
+                orderKey(101L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("10")
         ));
         orderBook.add(BookOrderEntry.create(
-                102L,
+                orderKey(102L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("5")
@@ -326,9 +326,9 @@ class InMemoryOrderBookTest {
 
         assertThat(delta.before().totalQty()).isEqualByComparingTo("15");
         assertThat(delta.after().totalQty()).isEqualByComparingTo("5");
-        assertThat(orderBook.findOrder(101L)).isEmpty();
-        assertThat(orderBook.findOrder(102L)).isPresent();
-        assertThat(orderBook.findOrder(102L).orElseThrow().getRemainingQty()).isEqualByComparingTo("5");
+        assertThat(orderBook.findOrder(orderKey(101L))).isEmpty();
+        assertThat(orderBook.findOrder(orderKey(102L))).isPresent();
+        assertThat(orderBook.findOrder(orderKey(102L)).orElseThrow().getRemainingQty()).isEqualByComparingTo("5");
         assertThat(orderBook.getLevelSnapshot(OrderSide.BID, new BigDecimal("50000"))).isPresent();
         assertThat(orderBook.getLevelSnapshot(OrderSide.BID, new BigDecimal("50000")).orElseThrow().orderCount())
                 .isEqualTo(1);
@@ -339,7 +339,7 @@ class InMemoryOrderBookTest {
     void reject_readding_filled_entry() {
         InMemoryOrderBook orderBook = new InMemoryOrderBook();
         BookOrderEntry entry = BookOrderEntry.create(
-                101L,
+                orderKey(101L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("10")
@@ -363,7 +363,7 @@ class InMemoryOrderBookTest {
     void reject_non_positive_execution_quantity(String executedQty) {
         InMemoryOrderBook orderBook = new InMemoryOrderBook();
         orderBook.add(BookOrderEntry.create(
-                101L,
+                orderKey(101L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("10")
@@ -375,5 +375,9 @@ class InMemoryOrderBookTest {
         assertThatThrownBy(() -> orderBook.applyExecution(
                 OrderSide.BID, price, qty))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    private static String orderKey(Long orderId) {
+        return "order-key-" + orderId;
     }
 }

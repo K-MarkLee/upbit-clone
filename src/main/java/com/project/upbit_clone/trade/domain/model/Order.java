@@ -21,7 +21,8 @@ import java.math.BigDecimal;
 @Table(
         name = "orders",
         uniqueConstraints = {
-                @UniqueConstraint(name = "uk_orders_client", columnNames = {"user_id", "client_order_id"})
+                @UniqueConstraint(name = "uk_orders_client", columnNames = {"user_id", "client_order_id"}),
+                @UniqueConstraint(name = "uk_orders_order_key", columnNames = {"order_key"})
         }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -42,6 +43,9 @@ public class Order extends BaseEntity {
 
     @Column(name = "client_order_id", nullable = false, length = 150)
     private String clientOrderId;
+
+    @Column(name = "order_key", nullable = false, length = 64)
+    private String orderKey;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "order_side", nullable = false)
@@ -91,6 +95,7 @@ public class Order extends BaseEntity {
         this.market = command.market();
         this.user = command.user();
         this.clientOrderId = command.clientOrderId();
+        this.orderKey = command.orderKey();
         this.orderSide = command.orderSide();
         this.orderType = command.orderType();
         this.timeInForce = resolvedTif;
@@ -107,6 +112,7 @@ public class Order extends BaseEntity {
             Market market,
             User user,
             String clientOrderId,
+            String orderKey,
             OrderSide orderSide,
             OrderType orderType,
             TimeInForce timeInForce,
@@ -206,6 +212,9 @@ public class Order extends BaseEntity {
                 || command.user() == null
                 || command.clientOrderId() == null
                 || command.clientOrderId().isBlank()
+                || command.orderKey() == null
+                || command.orderKey().isBlank()
+                || command.orderKey.length() > 64
                 || command.orderSide() == null
                 || command.orderType() == null) {
             throw new BusinessException(ErrorCode.INVALID_ORDER_INPUT);

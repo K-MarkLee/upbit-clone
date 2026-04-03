@@ -112,6 +112,42 @@ class PlaceOrderTest {
     }
 
     @Test
+    @DisplayName("Happy : place dispatch message는 append된 commandId를 orderKey로 전달한다.")
+    void handle_dispatches_place_message_with_order_key_from_appended_command_id() {
+        // given
+        PlaceOrder.Command command = validCommand();
+        User activeUser = User.create("u@test.com", "user", EnumStatus.ACTIVE, "pw");
+        Market activeMarket = activeMarket();
+
+        when(idempotencyHitService.find(1L, "cid-1", CommandType.PLACE_ORDER))
+                .thenReturn(Optional.empty());
+        when(userRepository.findById(1L)).thenReturn(Optional.of(activeUser));
+        when(marketRepository.findWithAssetsById(1L)).thenReturn(Optional.of(activeMarket));
+        when(commandLogAppendService.append(any(CommandLog.class)))
+                .thenAnswer(invocation -> {
+                    CommandLog log = invocation.getArgument(0);
+                    setCommandLogId(log, 100L);
+                    return log;
+                });
+
+        // when
+        placeOrder.handle(command);
+
+        // then
+        ArgumentCaptor<CommandLog> logCaptor = ArgumentCaptor.forClass(CommandLog.class);
+        ArgumentCaptor<CommandMessage> messageCaptor = ArgumentCaptor.forClass(CommandMessage.class);
+        verify(commandLogAppendService).append(logCaptor.capture());
+        verify(commandDispatcher).dispatch(messageCaptor.capture());
+
+        CommandLog appended = logCaptor.getValue();
+        assertThat(messageCaptor.getValue()).isInstanceOf(CommandMessage.Place.class);
+        CommandMessage.Place dispatched = (CommandMessage.Place) messageCaptor.getValue();
+        assertThat(dispatched.commandLogId()).isEqualTo(100L);
+        assertThat(dispatched.clientOrderId()).isEqualTo(command.clientOrderId());
+        assertThat(dispatched.orderKey()).isEqualTo(appended.getCommandId());
+    }
+
+    @Test
     @DisplayName("Happy : dispatch 실패여도 append 성공이면 ACCEPTED 응답을 반환한다.")
     void handle_returns_accepted_when_dispatch_fails() {
         // given

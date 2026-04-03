@@ -16,7 +16,12 @@ import java.util.Objects;
 
 @Entity
 @Getter
-@Table(name = "trade")
+@Table(
+        name = "trade",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_trade_trade_key", columnNames = "trade_key")
+        }
+)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Trade {
 
@@ -38,6 +43,9 @@ public class Trade {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sell_order_id", nullable = false)
     private Order sellOrder;
+
+    @Column(name = "trade_key", nullable = false, length = 64)
+    private String tradeKey;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "maker_order_side", nullable = false)
@@ -110,6 +118,7 @@ public class Trade {
         this.market = command.market();
         this.buyOrder = command.buyOrder();
         this.sellOrder = command.sellOrder();
+        this.tradeKey = command.tradeKey();
         this.makerOrderSide = command.makerOrderSide;
         this.price = new PositiveAmount(command.price()).value();
         this.quantity = new PositiveAmount(command.quantity()).value();
@@ -125,6 +134,7 @@ public class Trade {
             Market market,
             Order buyOrder,
             Order sellOrder,
+            String tradeKey,
             OrderSide makerOrderSide,
             BigDecimal price,
             BigDecimal quantity,
@@ -141,6 +151,9 @@ public class Trade {
                 || command.market() == null
                 || command.buyOrder() == null
                 || command.sellOrder() == null
+                || command.tradeKey() == null
+                || command.tradeKey().isBlank()
+                || command.tradeKey().length() > 64
                 || command.makerOrderSide() == null
                 || command.price() == null
                 || command.quantity() == null

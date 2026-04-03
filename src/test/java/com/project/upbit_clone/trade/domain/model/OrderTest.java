@@ -58,6 +58,7 @@ class OrderTest {
         assertThat(order.getMarket()).isEqualTo(market);
         assertThat(order.getUser()).isEqualTo(user);
         assertThat(order.getClientOrderId()).isEqualTo(clientOrderId);
+        assertThat(order.getOrderKey()).startsWith("order-key-");
         assertThat(order.getOrderSide()).isEqualTo(OrderSide.BID);
         assertThat(order.getOrderType()).isEqualTo(OrderType.LIMIT);
         assertThat(order.getTimeInForce()).isEqualTo(TimeInForce.GTC);
@@ -87,6 +88,7 @@ class OrderTest {
         assertThat(order.getMarket()).isEqualTo(market);
         assertThat(order.getUser()).isEqualTo(user);
         assertThat(order.getClientOrderId()).isEqualTo(clientOrderId);
+        assertThat(order.getOrderKey()).startsWith("order-key-");
         assertThat(order.getOrderSide()).isEqualTo(OrderSide.ASK);
         assertThat(order.getOrderType()).isEqualTo(OrderType.LIMIT);
         assertThat(order.getTimeInForce()).isEqualTo(TimeInForce.GTC);
@@ -218,6 +220,9 @@ class OrderTest {
         return Stream.of(
 
                 Arguments.of("command null", null),
+                Arguments.of("orderKey null", new Order.CreateCommand(
+                        market, user, "client-order-1", null, OrderSide.BID, OrderType.LIMIT, null, new BigDecimal("10000"), BigDecimal.ONE, null
+                )),
                 Arguments.of("market null", createCommand(
                         null, user, "client-order-1", OrderSide.BID, OrderType.LIMIT, null, new BigDecimal("10000"), BigDecimal.ONE, null
                 )),
@@ -259,6 +264,27 @@ class OrderTest {
         );
 
         // when & then
+        assertThatThrownBy(() -> Order.create(command))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_ORDER_INPUT);
+    }
+
+    @Test
+    @DisplayName("Negative : order_key가 64자를 초과하면 BusinessException을 반환한다.")
+    void create_order_with_too_long_order_key() {
+        Order.CreateCommand command = new Order.CreateCommand(
+                market,
+                user,
+                clientOrderId,
+                "o".repeat(65),
+                OrderSide.BID,
+                OrderType.LIMIT,
+                null,
+                price,
+                quantity,
+                null
+        );
+
         assertThatThrownBy(() -> Order.create(command))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_ORDER_INPUT);
@@ -800,7 +826,21 @@ class OrderTest {
             BigDecimal quoteAmount
     ) {
         return new Order.CreateCommand(
-                market, user, clientOrderId, orderSide, orderType, timeInForce, price, quantity, quoteAmount
+                market,
+                user,
+                clientOrderId,
+                nextOrderKey(clientOrderId),
+                orderSide,
+                orderType,
+                timeInForce,
+                price,
+                quantity,
+                quoteAmount
         );
+    }
+
+    private static String nextOrderKey(String seed) {
+        String normalized = (seed == null || seed.isBlank()) ? "blank" : seed.replace(' ', '_');
+        return "order-key-" + normalized;
     }
 }

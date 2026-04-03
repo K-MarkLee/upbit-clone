@@ -5,7 +5,6 @@ import com.project.upbit_clone.trade.application.dispatch.CommandMessage;
 import com.project.upbit_clone.trade.domain.model.Market;
 import com.project.upbit_clone.trade.domain.model.Order;
 import com.project.upbit_clone.trade.domain.repository.MarketRepository;
-import com.project.upbit_clone.trade.infrastructure.persistence.model.CommandLog;
 import com.project.upbit_clone.trade.domain.vo.OrderSide;
 import com.project.upbit_clone.trade.domain.vo.OrderType;
 import com.project.upbit_clone.trade.domain.vo.TimeInForce;
@@ -62,11 +61,12 @@ public class PlaceOrder extends AbstractOrderIngress<PlaceOrder.Command> {
     }
 
     @Override
-    protected void validateBusiness(Command command, Market market, User user) {
+    protected void validateBusiness(Command command, Market market, User user, String commandId) {
         Order.create(new Order.CreateCommand(
                 market,
                 user,
                 command.clientOrderId(),
+                commandId,
                 command.orderSide(),
                 command.orderType(),
                 command.timeInForce(),
@@ -77,13 +77,14 @@ public class PlaceOrder extends AbstractOrderIngress<PlaceOrder.Command> {
     }
 
     @Override
-    protected CommandMessage toCommandMessage(Long commandLogId, Command command, String marketCode) {
+    protected CommandMessage toCommandMessage(Long commandLogId, String commandId, Command command, String marketCode) {
         return new CommandMessage.Place(
                 commandLogId,
                 command.userId(),
                 command.marketId(),
                 marketCode,
                 command.clientOrderId(),
+                commandId,
                 command.orderSide(),
                 command.orderType(),
                 command.timeInForce(),

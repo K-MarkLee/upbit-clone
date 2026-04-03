@@ -37,6 +37,7 @@ class MarketWorkerManagerTest {
                 BTC_MARKET_ID,
                 "KRW-BTC",
                 "cid-btc-place",
+                "order-key-btc-place",
                 OrderSide.BID,
                 OrderType.LIMIT,
                 TimeInForce.GTC,
@@ -50,6 +51,7 @@ class MarketWorkerManagerTest {
                 BTC_MARKET_ID,
                 "KRW-BTC",
                 "cid-btc-cancel",
+                "order-key-btc-place",
                 "USER_REQUEST"
         );
         ethPlaceMessage = new CommandMessage.Place(
@@ -58,6 +60,7 @@ class MarketWorkerManagerTest {
                 ETH_MARKET_ID,
                 "KRW-ETH",
                 "cid-eth-place",
+                "order-key-eth-place",
                 OrderSide.ASK,
                 OrderType.LIMIT,
                 TimeInForce.GTC,

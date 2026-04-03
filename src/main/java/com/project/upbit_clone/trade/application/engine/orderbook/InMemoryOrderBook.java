@@ -1,6 +1,5 @@
 package com.project.upbit_clone.trade.application.engine.orderbook;
 
-import com.project.upbit_clone.global.domain.vo.PositiveAmount;
 import com.project.upbit_clone.global.exception.BusinessException;
 import com.project.upbit_clone.global.exception.ErrorCode;
 import com.project.upbit_clone.trade.application.engine.EngineException;
@@ -21,7 +20,7 @@ public class InMemoryOrderBook {
     private final NavigableMap<BigDecimal, PriceLevel> askLevels;
 
     // 주문 취소와 조회를 위한 인덱스
-    private final Map<Long, BookOrderEntry> orderIndex;
+    private final Map<String, BookOrderEntry> orderIndex;
 
     public InMemoryOrderBook() {
         this.bidLevels = new TreeMap<>(Comparator.reverseOrder());
@@ -46,18 +45,18 @@ public class InMemoryOrderBook {
                 price -> PriceLevel.create(entry.getSide(), price)
         );
         level.enqueue(entry);
-        orderIndex.put(entry.getOrderId(), entry);
+        orderIndex.put(entry.getOrderKey(), entry);
 
         return delta;
     }
 
     // 주문을 제거하고 비어 있는 가격 레벨은 함께 정리한다.
-    public Optional<LevelDelta> remove(Long orderId) {
-        if (orderId == null) {
+    public Optional<LevelDelta> remove(String orderKey) {
+        if (orderKey == null || orderKey.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_ORDER_BOOK_INPUT);
         }
 
-        BookOrderEntry entry = orderIndex.get(orderId);
+        BookOrderEntry entry = orderIndex.get(orderKey);
         if (entry == null) {
             return Optional.empty();
         }
@@ -65,13 +64,13 @@ public class InMemoryOrderBook {
         NavigableMap<BigDecimal, PriceLevel> levels = levels(entry.getSide());
         PriceLevel level = levels.get(entry.getPrice());
         if (level == null) {
-            throw new EngineException("orderId의 price level 을 찾을 수 없습니다.: " + orderId);
+            throw new EngineException("orderKey의 price level 을 찾을 수 없습니다.: " + orderKey);
         }
 
         PriceLevel.Snapshot before = level.snapshot();
         boolean removed = level.remove(entry);
         if (!removed) {
-            throw new EngineException("price level entry 제거에 실패했습니다.: " + orderId);
+            throw new EngineException("price level entry 제거에 실패했습니다.: " + orderKey);
         }
 
         PriceLevel.Snapshot after;
@@ -82,7 +81,7 @@ public class InMemoryOrderBook {
             after = level.snapshot();
         }
 
-        orderIndex.remove(orderId);
+        orderIndex.remove(orderKey);
 
         return Optional.of(new LevelDelta(entry.getSide(), entry.getPrice(), before, after));
     }
@@ -106,7 +105,7 @@ public class InMemoryOrderBook {
 
         PriceLevel.Snapshot after;
         if (filled) {
-            orderIndex.remove(headEntry.getOrderId());
+            orderIndex.remove(headEntry.getOrderKey());
 
             if (level.isEmpty()) {
                 levels.remove(level.getPrice());
@@ -140,11 +139,11 @@ public class InMemoryOrderBook {
         if (entry == null || entry.getSide() == null || entry.getPrice() == null || entry.getRemainingQty() == null) {
             throw new BusinessException(ErrorCode.INVALID_ORDER_BOOK_INPUT);
         }
-        if (orderIndex.containsKey(entry.getOrderId())) {
-            throw new EngineException("중복된 orderId 입니다.: " + entry.getOrderId());
+        if (orderIndex.containsKey(entry.getOrderKey())) {
+            throw new EngineException("중복된 orderKey 입니다.: " + entry.getOrderKey());
         }
         if (entry.getRemainingQty().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new EngineException("체결된 entry는 오더북에 추가될 수 없습니다.: " + entry.getOrderId());
+            throw new EngineException("체결된 entry는 오더북에 추가될 수 없습니다.: " + entry.getOrderKey());
         }
         validateSideAndPrice(entry.getSide(), entry.getPrice());
     }
@@ -154,7 +153,9 @@ public class InMemoryOrderBook {
         if (side == null || price == null) {
             throw new BusinessException(ErrorCode.INVALID_ORDER_BOOK_INPUT);
         }
-        new PositiveAmount(price);
+        if (price.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER_BOOK_INPUT);
+        }
     }
 
     // side 에 맞는 가격 레벨 맵을 반환한다.
@@ -187,8 +188,6 @@ public class InMemoryOrderBook {
         return bestLevel(askLevels).map(PriceLevel::peekFirst);
     }
 
-
-
     // 특정 가격 레벨 스냅샷 조회
     public Optional<PriceLevel.Snapshot> getLevelSnapshot(OrderSide side, BigDecimal price) {
         validateSideAndPrice(side, price);
@@ -196,12 +195,12 @@ public class InMemoryOrderBook {
                 .map(PriceLevel::snapshot);
     }
 
-    // orderId 기준 엔트리 조회
-    public Optional<BookOrderEntry> findOrder(Long orderId) {
-        if (orderId == null) {
+    // orderKey 기준 엔트리 조회
+    public Optional<BookOrderEntry> findOrder(String orderKey) {
+        if (orderKey == null || orderKey.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_ORDER_BOOK_INPUT);
         }
-        return Optional.ofNullable(orderIndex.get(orderId));
+        return Optional.ofNullable(orderIndex.get(orderKey));
     }
 
     // 현재 bid 가격 레벨 개수

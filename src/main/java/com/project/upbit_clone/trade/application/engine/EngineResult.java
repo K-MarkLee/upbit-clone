@@ -42,22 +42,21 @@ public final class EngineResult {
             validateFillRules(executedQuantity, executedQuoteAmount, fills);
         }
 
-        public static PlaceResult open(BigDecimal remainingQuantity) {
-            return open(remainingQuantity, List.of());
-        }
-
         public static PlaceResult open(
+                BigDecimal executedQuantity,
+                BigDecimal executedQuoteAmount,
                 BigDecimal remainingQuantity,
+                List<Fill> fills,
                 List<BookDelta> bookDeltas
         ) {
             return new PlaceResult(
                     OrderStatus.OPEN,
-                    BigDecimal.ZERO,
-                    BigDecimal.ZERO,
+                    executedQuantity,
+                    executedQuoteAmount,
                     remainingQuantity,
                     BigDecimal.ZERO,
                     null,
-                    List.of(),
+                    fills,
                     bookDeltas
             );
         }
@@ -65,6 +64,7 @@ public final class EngineResult {
         public static PlaceResult filled(
                 BigDecimal executedQuantity,
                 BigDecimal executedQuoteAmount,
+                BigDecimal unlockAmount,
                 List<Fill> fills,
                 List<BookDelta> bookDeltas
         ) {
@@ -73,7 +73,7 @@ public final class EngineResult {
                     executedQuantity,
                     executedQuoteAmount,
                     BigDecimal.ZERO,
-                    BigDecimal.ZERO,
+                    unlockAmount,
                     null,
                     fills,
                     bookDeltas
@@ -105,6 +105,7 @@ public final class EngineResult {
             return executedQuantity.compareTo(BigDecimal.ZERO) > 0
                     || executedQuoteAmount.compareTo(BigDecimal.ZERO) > 0;
         }
+
 
         private static void validateStatusRules(
                 OrderStatus takerStatus,
@@ -196,7 +197,7 @@ public final class EngineResult {
     }
 
     public record Fill(
-            Long makerOrderId,
+            String makerOrderKey,
             BigDecimal price,
             BigDecimal executedQuantity,
             BigDecimal executedQuoteAmount,
@@ -204,7 +205,7 @@ public final class EngineResult {
     ) {
 
         public Fill {
-            Objects.requireNonNull(makerOrderId, "makerOrderId는 null일 수 없습니다.");
+            Objects.requireNonNull(makerOrderKey, "makerOrderKey는 null일 수 없습니다.");
             validatePositive(price, "체결 가격은 0보다 커야 합니다.");
             validatePositive(executedQuantity, "executedQuantity는 0보다 커야 합니다.");
             validatePositive(executedQuoteAmount, "executedQuoteAmount는 0보다 커야 합니다.");
@@ -262,4 +263,5 @@ public final class EngineResult {
             throw new EngineException(message);
         }
     }
+
 }
