@@ -28,7 +28,8 @@ public sealed interface CommandMessage permits CommandMessage.Place, CommandMess
             TimeInForce timeInForce,
             BigDecimal price,
             BigDecimal quantity,
-            BigDecimal quoteAmount
+            BigDecimal quoteAmount,
+            int baseAssetScale
     ) implements CommandMessage {
 
         @Override

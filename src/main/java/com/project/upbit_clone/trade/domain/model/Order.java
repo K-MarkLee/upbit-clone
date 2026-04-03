@@ -358,6 +358,8 @@ public class Order extends BaseEntity {
                 || executedQuoteAmount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new BusinessException(ErrorCode.INVALID_TRADE_INPUT);
         }
+
+        // TODO: Reject cumulative overfill/overspend here once the engine/apply contract is finalized.
         this.executedQuantity = this.executedQuantity.add(executedQuantity);
         this.executedQuoteAmount = this.executedQuoteAmount.add(executedQuoteAmount);
 

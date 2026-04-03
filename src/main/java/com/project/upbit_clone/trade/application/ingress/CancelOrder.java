@@ -66,14 +66,14 @@ public class CancelOrder extends AbstractOrderIngress<CancelOrder.Command> {
     }
 
     @Override
-    protected CommandMessage toCommandMessage(Long commandLogId, String commandId, Command command, String marketCode) {
+    protected CommandMessage toCommandMessage(Long commandLogId, String commandId, Command command, Market market) {
         CommandLog targetPlaceCommand = findRequiredPlaceCommand(command);
 
         return new CommandMessage.Cancel(
                 commandLogId,
                 command.userId(),
                 command.marketId(),
-                marketCode,
+                market.getMarketCode(),
                 command.clientOrderId(),
                 targetPlaceCommand.getCommandId(),
                 command.cancelReason()

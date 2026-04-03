@@ -46,6 +46,7 @@ public final class EngineResult {
                 BigDecimal executedQuantity,
                 BigDecimal executedQuoteAmount,
                 BigDecimal remainingQuantity,
+                BigDecimal unlockAmount,
                 List<Fill> fills,
                 List<BookDelta> bookDeltas
         ) {
@@ -54,7 +55,7 @@ public final class EngineResult {
                     executedQuantity,
                     executedQuoteAmount,
                     remainingQuantity,
-                    BigDecimal.ZERO,
+                    unlockAmount,
                     null,
                     fills,
                     bookDeltas
@@ -81,19 +82,23 @@ public final class EngineResult {
         }
 
         public static PlaceResult canceled(
+                BigDecimal executedQuantity,
+                BigDecimal executedQuoteAmount,
                 BigDecimal remainingQuantity,
                 BigDecimal unlockAmount,
-                CancelReason cancelReason
+                CancelReason cancelReason,
+                List<Fill> fills,
+                List<BookDelta> bookDeltas
         ) {
             return new PlaceResult(
                     OrderStatus.CANCELED,
-                    BigDecimal.ZERO,
-                    BigDecimal.ZERO,
+                    executedQuantity,
+                    executedQuoteAmount,
                     remainingQuantity,
                     unlockAmount,
                     cancelReason,
-                    List.of(),
-                    List.of()
+                    fills,
+                    bookDeltas
             );
         }
 
