@@ -20,18 +20,18 @@ class OrderCommandHashServiceTest {
     private final OrderCommandHashService hashService = new OrderCommandHashService();
 
     @Test
-    @DisplayName("Happy : LIMIT 주문에서 null/GTC timeInForce는 같은 해시를 생성한다.")
-    void hash_place_order_limit_null_tif_equals_gtc() {
+    @DisplayName("Happy : 정규화된 PLACE_ORDER는 멱등 키가 달라도 같은 해시를 생성한다.")
+    void hash_place_order_ignores_idempotency_key_fields() {
         // given
         PlaceOrder.Command left = new PlaceOrder.Command(
                 1L, 1L, "cid-1",
-                OrderSide.BID, OrderType.LIMIT, null,
-                new BigDecimal("10000"), new BigDecimal("1.2300"), null
+                OrderSide.BID, OrderType.LIMIT, TimeInForce.GTC,
+                new BigDecimal("10000"), new BigDecimal("1.23"), null
         );
         PlaceOrder.Command right = new PlaceOrder.Command(
                 2L, 1L, "cid-2",
                 OrderSide.BID, OrderType.LIMIT, TimeInForce.GTC,
-                new BigDecimal("10000.0"), new BigDecimal("1.23"), null
+                new BigDecimal("10000"), new BigDecimal("1.23"), null
         );
 
         // when
@@ -52,18 +52,19 @@ class OrderCommandHashServiceTest {
     }
 
     @Test
-    @DisplayName("Happy : MARKET 주문에서 null/IOC timeInForce는 같은 해시를 생성한다.")
-    void hash_place_order_market_null_tif_equals_ioc() {
+    @DisplayName("Happy : 정규화된 decimal은 plain string 기준으로 같은 해시를 생성한다.")
+    void hash_place_order_uses_plain_string_for_decimal() {
         // given
-        PlaceOrder.Command left = new PlaceOrder.Command(
-                1L, 1L, "cid-1",
-                OrderSide.BID, OrderType.MARKET, null,
-                null, null, new BigDecimal("10000.00")
-        );
+        BigDecimal scientific = new BigDecimal("10000.0").stripTrailingZeros();
         PlaceOrder.Command right = new PlaceOrder.Command(
                 1L, 1L, "cid-1",
                 OrderSide.BID, OrderType.MARKET, TimeInForce.IOC,
                 null, null, new BigDecimal("10000")
+        );
+        PlaceOrder.Command left = new PlaceOrder.Command(
+                2L, 1L, "cid-2",
+                OrderSide.BID, OrderType.MARKET, TimeInForce.IOC,
+                null, null, scientific
         );
 
         // when

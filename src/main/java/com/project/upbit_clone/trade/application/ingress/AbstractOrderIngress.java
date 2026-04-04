@@ -51,32 +51,33 @@ abstract class AbstractOrderIngress<C extends OrderCommand> {
 
     protected CommandAck handleInternal(C command) {
         validateInput(command);
-        String requestHash = orderCommandHashService.hash(command);
+        C normalized = normalize(command);
+        String requestHash = orderCommandHashService.hash(normalized);
 
         Optional<CommandLog> hit = idempotencyHitService.find(
-                command.userId(),
-                command.clientOrderId(),
-                command.commandType()
+                normalized.userId(),
+                normalized.clientOrderId(),
+                normalized.commandType()
         );
         if (hit.isPresent()) {
             return resolveIdempotencyHit(hit.get(), requestHash);
         }
 
-        User user = validateAndGetUser(command.userId());
-        Market market = validateAndGetMarket(command.marketId());
+        User user = validateAndGetUser(normalized.userId());
+        Market market = validateAndGetMarket(normalized.marketId());
         String commandId = UUID.randomUUID().toString();
-        validateBusiness(command, market, user, commandId);
+        validateBusiness(normalized, market, user, commandId);
 
-        CommandLog commandLog = createCommandLog(command, requestHash, commandId);
+        CommandLog commandLog = createCommandLog(normalized, requestHash, commandId);
         CommandLog saved;
         try {
             saved = commandLogAppendService.append(commandLog);
 
         } catch (DataIntegrityViolationException exception) {
             Optional<CommandLog> recovered = idempotencyHitService.findInNewTransaction(
-                    command.userId(),
-                    command.clientOrderId(),
-                    command.commandType()
+                    normalized.userId(),
+                    normalized.clientOrderId(),
+                    normalized.commandType()
             );
             if (recovered.isEmpty()) {
                 throw exception;
@@ -84,22 +85,24 @@ abstract class AbstractOrderIngress<C extends OrderCommand> {
             return resolveIdempotencyHit(recovered.get(), requestHash);
         }
         try {
-            commandDispatcher.dispatch(toCommandMessage(saved.getId(), commandId, command, market));
+            commandDispatcher.dispatch(toCommandMessage(saved.getId(), commandId, normalized, market));
         } catch (RuntimeException exception) {
             // dispatch 실패 로거
             log.error(
                     "Append 후 command dispatch를 실패했습니다. commandLogId={}, commandType={}, userId={}, marketId={}, marketCode={}, clientOrderId={}",
                     saved.getId(),
-                    command.commandType(),
-                    command.userId(),
-                    command.marketId(),
+                    normalized.commandType(),
+                    normalized.userId(),
+                    normalized.marketId(),
                     market.getMarketCode(),
-                    command.clientOrderId(),
+                    normalized.clientOrderId(),
                     exception
             );
         }
         return CommandAck.accepted(saved, false);
     }
+
+    protected abstract C normalize(C command);
 
     protected abstract void validateBusiness(C command, Market market, User user, String commandId);
 

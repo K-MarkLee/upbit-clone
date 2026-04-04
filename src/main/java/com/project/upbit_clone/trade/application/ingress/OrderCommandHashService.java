@@ -2,8 +2,6 @@ package com.project.upbit_clone.trade.application.ingress;
 
 import com.project.upbit_clone.global.exception.BusinessException;
 import com.project.upbit_clone.global.exception.ErrorCode;
-import com.project.upbit_clone.trade.domain.vo.OrderType;
-import com.project.upbit_clone.trade.domain.vo.TimeInForce;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -22,17 +20,16 @@ public class OrderCommandHashService {
         return sha256Hex(canonical);
     }
 
-    // 멱등 키(userId, clientOrderId, commandType)를 제외하고 정규화 문자열 생성.
+    // 이미 정규화된 command에서 멱등 해시용 canonical 문자열을 생성한다.
     private String canonicalize(OrderCommand command) {
         if (command instanceof PlaceOrder.Command place) {
-            TimeInForce normalizedTif = normalizeTif(place.orderType(), place.timeInForce());
             return "marketId=" + place.marketId()
                     + "|orderSide=" + normalizeEnum(place.orderSide())
                     + "|orderType=" + normalizeEnum(place.orderType())
-                    + "|timeInForce=" + normalizeEnum(normalizedTif)
-                    + "|price=" + normalizeDecimal(place.price())
-                    + "|quantity=" + normalizeDecimal(place.quantity())
-                    + "|quoteAmount=" + normalizeDecimal(place.quoteAmount());
+                    + "|timeInForce=" + normalizeEnum(place.timeInForce())
+                    + "|price=" + decimalString(place.price())
+                    + "|quantity=" + decimalString(place.quantity())
+                    + "|quoteAmount=" + decimalString(place.quoteAmount());
         }
         if (command instanceof CancelOrder.Command cancel) {
             return "marketId=" + cancel.marketId()
@@ -50,26 +47,14 @@ public class OrderCommandHashService {
         return value == null ? "null" : value.name();
     }
 
-    private String normalizeDecimal(BigDecimal value) {
+    private String decimalString(BigDecimal value) {
         if (value == null) {
             return "null";
         }
-        // decimal의 소수점 아래 0 제거 1.2300 -> 1.23
-        BigDecimal normalized = value.stripTrailingZeros();
-        if (normalized.compareTo(BigDecimal.ZERO) == 0) {
+        if (value.compareTo(BigDecimal.ZERO) == 0) {
             return "0";
         }
-        return normalized.toPlainString();
-    }
-
-    private TimeInForce normalizeTif(OrderType orderType, TimeInForce timeInForce) {
-        if (orderType == OrderType.MARKET && (timeInForce == null || timeInForce == TimeInForce.IOC)) {
-            return TimeInForce.IOC;
-        }
-        if (orderType == OrderType.LIMIT && (timeInForce == null || timeInForce == TimeInForce.GTC)) {
-            return TimeInForce.GTC;
-        }
-        return timeInForce;
+        return value.toPlainString();
     }
 
     private String sha256Hex(String value) {
