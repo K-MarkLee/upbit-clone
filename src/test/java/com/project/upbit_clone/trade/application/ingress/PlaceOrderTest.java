@@ -149,6 +149,43 @@ class PlaceOrderTest {
     }
 
     @Test
+    @DisplayName("Happy : dispatch message는 정규화된 tif와 decimal 값을 전달한다.")
+    void handle_dispatches_place_message_with_normalized_values() {
+        // given
+        PlaceOrder.Command command = new PlaceOrder.Command(
+                1L, 1L, "cid-1",
+                OrderSide.BID, OrderType.LIMIT, null,
+                new BigDecimal("10000.0"), new BigDecimal("1.2300"), null
+        );
+        User activeUser = User.create("u@test.com", "user", EnumStatus.ACTIVE, "pw");
+        Market activeMarket = activeMarket();
+
+        when(idempotencyHitService.find(1L, "cid-1", CommandType.PLACE_ORDER))
+                .thenReturn(Optional.empty());
+        when(userRepository.findById(1L)).thenReturn(Optional.of(activeUser));
+        when(marketRepository.findWithAssetsById(1L)).thenReturn(Optional.of(activeMarket));
+        when(commandLogAppendService.append(any(CommandLog.class)))
+                .thenAnswer(invocation -> {
+                    CommandLog log = invocation.getArgument(0);
+                    setCommandLogId(log, 100L);
+                    return log;
+                });
+
+        // when
+        placeOrder.handle(command);
+
+        // then
+        ArgumentCaptor<CommandMessage> messageCaptor = ArgumentCaptor.forClass(CommandMessage.class);
+        verify(commandDispatcher).dispatch(messageCaptor.capture());
+        assertThat(messageCaptor.getValue()).isInstanceOf(CommandMessage.Place.class);
+
+        CommandMessage.Place dispatched = (CommandMessage.Place) messageCaptor.getValue();
+        assertThat(dispatched.timeInForce()).isEqualTo(TimeInForce.GTC);
+        assertThat(dispatched.price()).isEqualByComparingTo("10000");
+        assertThat(dispatched.quantity()).isEqualByComparingTo("1.23");
+    }
+
+    @Test
     @DisplayName("Happy : dispatch 실패여도 append 성공이면 ACCEPTED 응답을 반환한다.")
     void handle_returns_accepted_when_dispatch_fails() {
         // given
@@ -331,6 +368,52 @@ class PlaceOrderTest {
         assertThatThrownBy(() -> placeOrder.handle(invalid))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_LIMIT_BID_INPUT);
+        verify(commandLogAppendService, never()).append(any(CommandLog.class));
+    }
+
+    @Test
+    @DisplayName("Negative : 시장가 매수에 price가 있으면 BusinessException을 반환한다.")
+    void handle_with_invalid_market_bid_shape() {
+        // given
+        PlaceOrder.Command invalid = new PlaceOrder.Command(
+                1L, 1L, "cid-1",
+                OrderSide.BID, OrderType.MARKET, null,
+                new BigDecimal("10000"), null, new BigDecimal("10000")
+        );
+        User activeUser = User.create("u@test.com", "user", EnumStatus.ACTIVE, "pw");
+        Market activeMarket = activeMarket();
+        when(idempotencyHitService.find(1L, "cid-1", CommandType.PLACE_ORDER))
+                .thenReturn(Optional.empty());
+        when(userRepository.findById(1L)).thenReturn(Optional.of(activeUser));
+        when(marketRepository.findWithAssetsById(1L)).thenReturn(Optional.of(activeMarket));
+
+        // when & then
+        assertThatThrownBy(() -> placeOrder.handle(invalid))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_MARKET_BID_INPUT);
+        verify(commandLogAppendService, never()).append(any(CommandLog.class));
+    }
+
+    @Test
+    @DisplayName("Negative : FOK는 지원하지 않아 BusinessException을 반환한다.")
+    void handle_with_unsupported_fok() {
+        // given
+        PlaceOrder.Command invalid = new PlaceOrder.Command(
+                1L, 1L, "cid-1",
+                OrderSide.BID, OrderType.LIMIT, TimeInForce.FOK,
+                new BigDecimal("10000"), BigDecimal.ONE, null
+        );
+        User activeUser = User.create("u@test.com", "user", EnumStatus.ACTIVE, "pw");
+        Market activeMarket = activeMarket();
+        when(idempotencyHitService.find(1L, "cid-1", CommandType.PLACE_ORDER))
+                .thenReturn(Optional.empty());
+        when(userRepository.findById(1L)).thenReturn(Optional.of(activeUser));
+        when(marketRepository.findWithAssetsById(1L)).thenReturn(Optional.of(activeMarket));
+
+        // when & then
+        assertThatThrownBy(() -> placeOrder.handle(invalid))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.UNSUPPORTED_TIME_IN_FORCE);
         verify(commandLogAppendService, never()).append(any(CommandLog.class));
     }
 

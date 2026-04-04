@@ -58,6 +58,11 @@ public class CancelOrder extends AbstractOrderIngress<CancelOrder.Command> {
     }
 
     @Override
+    protected Command normalize(Command command) {
+        return command;
+    }
+
+    @Override
     protected void validateBusiness(Command command, Market market, User user, String commandId) {
         CommandLog placeCommand = findRequiredPlaceCommand(command);
         if (!command.marketId().equals(placeCommand.getMarketId())) {
