@@ -39,7 +39,14 @@ class EngineResultTest {
     @DisplayName("Happy : open 팩토리는 OPEN 상태와 기본값을 반환한다.")
     void open_factory_returns_open_status_with_default_values() {
         // when
-        EngineResult.PlaceResult result = EngineResult.PlaceResult.open(two);
+        EngineResult.PlaceResult result = EngineResult.PlaceResult.open(
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                two,
+                BigDecimal.ZERO,
+                List.of(),
+                List.of()
+        );
 
         // then
         assertThat(result.takerStatus()).isEqualTo(OrderStatus.OPEN);
@@ -57,7 +64,7 @@ class EngineResultTest {
     void filled_factory_returns_filled_status_with_execution_values() {
         // given
         EngineResult.Fill fill = new EngineResult.Fill(
-                101L,
+                "order-key-101",
                 thousand,
                 one,
                 thousand,
@@ -72,6 +79,7 @@ class EngineResultTest {
         EngineResult.PlaceResult result = EngineResult.PlaceResult.filled(
                 one,
                 thousand,
+                BigDecimal.ZERO,
                 List.of(fill),
                 List.of(bookDelta)
         );
@@ -93,7 +101,7 @@ class EngineResultTest {
         // given
         List<EngineResult.Fill> fills = new ArrayList<>();
         fills.add(new EngineResult.Fill(
-                101L,
+                "order-key-101",
                 thousand,
                 one,
                 thousand,
@@ -102,7 +110,7 @@ class EngineResultTest {
         List<EngineResult.BookDelta> bookDeltas = new ArrayList<>();
         bookDeltas.add(sampleBookDelta());
         EngineResult.Fill additionalFill = new EngineResult.Fill(
-                102L,
+                "order-key-102",
                 thousand,
                 one,
                 thousand,
@@ -172,7 +180,7 @@ class EngineResultTest {
         InMemoryOrderBook.LevelDelta levelDelta = sampleLevelDelta();
 
         assertThatThrownBy(() -> new EngineResult.Fill(
-                101L,
+                "order-key-101",
                 thousand,
                 BigDecimal.ZERO,
                 thousand,
@@ -232,7 +240,7 @@ class EngineResultTest {
     @DisplayName("Negative : PlaceResult는 체결 수치와 fills 합계를 함께 검증한다.")
     void place_result_validates_fill_invariants() {
         List<EngineResult.Fill> mismatchedFills = List.of(new EngineResult.Fill(
-                101L,
+                "order-key-101",
                 thousand,
                 one,
                 thousand,

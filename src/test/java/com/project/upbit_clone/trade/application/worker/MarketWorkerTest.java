@@ -3,6 +3,7 @@ package com.project.upbit_clone.trade.application.worker;
 import com.project.upbit_clone.trade.application.dispatch.CommandMessage;
 import com.project.upbit_clone.trade.application.engine.EngineResult;
 import com.project.upbit_clone.trade.application.engine.MatchingEngineCore;
+import com.project.upbit_clone.trade.application.engine.orderbook.InMemoryOrderBook;
 import com.project.upbit_clone.trade.domain.vo.OrderSide;
 import com.project.upbit_clone.trade.domain.vo.OrderType;
 import com.project.upbit_clone.trade.domain.vo.TimeInForce;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -65,12 +67,14 @@ class MarketWorkerTest {
                 200L,
                 "KRW-ETH",
                 "cid-1",
+                "order-key-1",
                 OrderSide.BID,
                 OrderType.LIMIT,
                 TimeInForce.GTC,
                 new BigDecimal("1000"),
                 new BigDecimal("1"),
-                null
+                null,
+                8
         );
 
         // when & then
@@ -91,6 +95,7 @@ class MarketWorkerTest {
                 100L,
                 "KRW-ETH",
                 "cid-2",
+                "order-key-2",
                 null
         );
 
@@ -110,12 +115,14 @@ class MarketWorkerTest {
                 100L,
                 "KRW-BTC",
                 "cid-1",
+                "order-key-1",
                 OrderSide.BID,
                 OrderType.LIMIT,
                 TimeInForce.GTC,
                 null,
                 new BigDecimal("1"),
-                null
+                null,
+                8
         );
 
         // when & then
@@ -134,18 +141,202 @@ class MarketWorkerTest {
                 100L,
                 "KRW-BTC",
                 "cid-1",
+                "order-key-1",
                 OrderSide.BID,
                 OrderType.MARKET,
                 TimeInForce.IOC,
                 null,
                 null,
-                null
+                null,
+                8
         );
 
         // when & then
         assertThatThrownBy(() -> marketWorker.enqueue(message))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("market bid message 필수값이 누락되어 있습니다.");
+    }
+
+    @Test
+    @DisplayName("Negative : limit 주문은 quoteAmount를 허용하지 않는다.")
+    void reject_limit_order_with_quote_amount() {
+        // given
+        CommandMessage.Place message = new CommandMessage.Place(
+                1L,
+                10L,
+                100L,
+                "KRW-BTC",
+                "cid-1",
+                "order-key-1",
+                OrderSide.BID,
+                OrderType.LIMIT,
+                TimeInForce.GTC,
+                new BigDecimal("1000"),
+                new BigDecimal("1"),
+                new BigDecimal("1000"),
+                8
+        );
+
+        // when & then
+        assertThatThrownBy(() -> marketWorker.enqueue(message))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("limit 주문은 quoteAmount를 허용하지 않습니다.");
+    }
+
+    @Test
+    @DisplayName("Negative : market bid 주문은 price와 quantity를 허용하지 않는다.")
+    void reject_market_bid_with_forbidden_fields() {
+        // given
+        CommandMessage.Place message = new CommandMessage.Place(
+                1L,
+                10L,
+                100L,
+                "KRW-BTC",
+                "cid-1",
+                "order-key-1",
+                OrderSide.BID,
+                OrderType.MARKET,
+                TimeInForce.IOC,
+                new BigDecimal("1000"),
+                new BigDecimal("1"),
+                new BigDecimal("1000"),
+                8
+        );
+
+        // when & then
+        assertThatThrownBy(() -> marketWorker.enqueue(message))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("market bid 주문은 price와 quantity를 허용하지 않습니다.");
+    }
+
+    @Test
+    @DisplayName("Negative : market ask 주문은 price와 quoteAmount를 허용하지 않는다.")
+    void reject_market_ask_with_forbidden_fields() {
+        // given
+        CommandMessage.Place message = new CommandMessage.Place(
+                1L,
+                10L,
+                100L,
+                "KRW-BTC",
+                "cid-1",
+                "order-key-1",
+                OrderSide.ASK,
+                OrderType.MARKET,
+                TimeInForce.IOC,
+                new BigDecimal("1000"),
+                new BigDecimal("1"),
+                new BigDecimal("1000"),
+                8
+        );
+
+        // when & then
+        assertThatThrownBy(() -> marketWorker.enqueue(message))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("market ask 주문은 price와 quoteAmount를 허용하지 않습니다.");
+    }
+
+    @Test
+    @DisplayName("Negative : limit 주문은 GTC만 허용한다.")
+    void reject_limit_order_with_non_gtc_tif() {
+        // given
+        CommandMessage.Place message = new CommandMessage.Place(
+                1L,
+                10L,
+                100L,
+                "KRW-BTC",
+                "cid-1",
+                "order-key-1",
+                OrderSide.BID,
+                OrderType.LIMIT,
+                TimeInForce.IOC,
+                new BigDecimal("1000"),
+                new BigDecimal("1"),
+                null,
+                8
+        );
+
+        // when & then
+        assertThatThrownBy(() -> marketWorker.enqueue(message))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("limit 주문은 GTC만 허용합니다.");
+    }
+
+    @Test
+    @DisplayName("Negative : market 주문은 IOC만 허용한다.")
+    void reject_market_order_with_non_ioc_tif() {
+        // given
+        CommandMessage.Place message = new CommandMessage.Place(
+                1L,
+                10L,
+                100L,
+                "KRW-BTC",
+                "cid-1",
+                "order-key-1",
+                OrderSide.BID,
+                OrderType.MARKET,
+                TimeInForce.GTC,
+                null,
+                null,
+                new BigDecimal("1000"),
+                8
+        );
+
+        // when & then
+        assertThatThrownBy(() -> marketWorker.enqueue(message))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("market 주문은 IOC만 허용합니다.");
+    }
+
+    @Test
+    @DisplayName("Negative : 양수 조건을 만족하지 않으면 적재할 수 없다.")
+    void reject_place_order_with_non_positive_amount() {
+        // given
+        CommandMessage.Place message = new CommandMessage.Place(
+                1L,
+                10L,
+                100L,
+                "KRW-BTC",
+                "cid-1",
+                "order-key-1",
+                OrderSide.BID,
+                OrderType.LIMIT,
+                TimeInForce.GTC,
+                BigDecimal.ZERO,
+                new BigDecimal("1"),
+                null,
+                8
+        );
+
+        // when & then
+        assertThatThrownBy(() -> marketWorker.enqueue(message))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("limit 주문의 price는 0보다 커야 합니다.");
+    }
+
+    @Test
+    @DisplayName("Negative : baseAssetScale은 0 이상이어야 한다.")
+    void reject_place_order_with_negative_base_asset_scale() {
+        // given
+        CommandMessage.Place message = new CommandMessage.Place(
+                1L,
+                10L,
+                100L,
+                "KRW-BTC",
+                "cid-1",
+                "order-key-1",
+                OrderSide.BID,
+                OrderType.MARKET,
+                TimeInForce.IOC,
+                null,
+                null,
+                new BigDecimal("1000"),
+                -1
+        );
+
+        // when & then
+        assertThatThrownBy(() -> marketWorker.enqueue(message))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("baseAssetScale은 0 이상이어야 합니다.");
     }
 
     @Test
@@ -158,6 +349,7 @@ class MarketWorkerTest {
                 100L,
                 "KRW-BTC",
                 " ",
+                "order-key-2",
                 null
         );
 
@@ -184,6 +376,31 @@ class MarketWorkerTest {
         assertThat(matchingEngineCore.lastMessage).isEqualTo(message);
     }
 
+    @Test
+    @DisplayName("Happy : worker가 cancel 메시지를 consume하면 targetOrderKey 주문을 오더북에서 제거한다.")
+    void worker_removes_resting_order_when_cancel_message_is_consumed() throws InterruptedException {
+        // given
+        CommandMessage.Place placeMessage = validLimitPlaceMessage();
+        CommandMessage.Cancel cancelMessage = new CommandMessage.Cancel(
+                2L,
+                10L,
+                100L,
+                "KRW-BTC",
+                "cid-1",
+                placeMessage.orderKey(),
+                "USER_REQUEST"
+        );
+
+        // when
+        marketWorker.start();
+        marketWorker.enqueue(placeMessage);
+        awaitOrderPresence(placeMessage.orderKey());
+        marketWorker.enqueue(cancelMessage);
+
+        // then
+        awaitOrderAbsence(placeMessage.orderKey());
+    }
+
     private CommandMessage.Place validLimitPlaceMessage() {
         return new CommandMessage.Place(
                 1L,
@@ -191,12 +408,14 @@ class MarketWorkerTest {
                 100L,
                 "KRW-BTC",
                 "cid-1",
+                "order-key-1",
                 OrderSide.BID,
                 OrderType.LIMIT,
                 TimeInForce.GTC,
                 new BigDecimal("1000"),
                 new BigDecimal("1"),
-                null
+                null,
+                8
         );
     }
 
@@ -211,11 +430,50 @@ class MarketWorkerTest {
         ) {
             this.lastMessage = message;
             invocationLatch.countDown();
-            return EngineResult.PlaceResult.open(message.quantity());
+            return EngineResult.PlaceResult.open(
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    message.quantity(),
+                    BigDecimal.ZERO,
+                    List.of(),
+                    List.of()
+            );
         }
 
         boolean awaitInvocation() throws InterruptedException {
             return invocationLatch.await(1, TimeUnit.SECONDS);
+        }
+    }
+
+    private void awaitOrderPresence(String orderKey) throws InterruptedException {
+        long deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
+        while (System.nanoTime() < deadlineNanos) {
+            if (currentOrderBook().findOrder(orderKey).isPresent()) {
+                return;
+            }
+            Thread.sleep(10);
+        }
+        assertThat(currentOrderBook().findOrder(orderKey)).isPresent();
+    }
+
+    private void awaitOrderAbsence(String orderKey) throws InterruptedException {
+        long deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
+        while (System.nanoTime() < deadlineNanos) {
+            if (currentOrderBook().findOrder(orderKey).isEmpty()) {
+                return;
+            }
+            Thread.sleep(10);
+        }
+        assertThat(currentOrderBook().findOrder(orderKey)).isEmpty();
+    }
+
+    private InMemoryOrderBook currentOrderBook() {
+        try {
+            java.lang.reflect.Field field = MarketWorker.class.getDeclaredField("orderBook");
+            field.setAccessible(true);
+            return (InMemoryOrderBook) field.get(marketWorker);
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            throw new IllegalStateException("MarketWorker orderBook 필드 조회 실패", e);
         }
     }
 }

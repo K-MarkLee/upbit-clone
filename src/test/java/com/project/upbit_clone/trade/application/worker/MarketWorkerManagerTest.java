@@ -43,7 +43,8 @@ class MarketWorkerManagerTest {
                 TimeInForce.GTC,
                 new BigDecimal("1000"),
                 new BigDecimal("1"),
-                null
+                null,
+                8
         );
         btcCancelMessage = new CommandMessage.Cancel(
                 2L,
@@ -66,7 +67,8 @@ class MarketWorkerManagerTest {
                 TimeInForce.GTC,
                 new BigDecimal("2000"),
                 new BigDecimal("2"),
-                null
+                null,
+                8
         );
     }
 
