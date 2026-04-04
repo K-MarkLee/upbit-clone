@@ -6,6 +6,7 @@ import com.project.upbit_clone.trade.application.engine.MatchingEngineCore;
 import com.project.upbit_clone.trade.application.engine.orderbook.InMemoryOrderBook;
 import com.project.upbit_clone.trade.domain.vo.OrderSide;
 import com.project.upbit_clone.trade.domain.vo.OrderType;
+import com.project.upbit_clone.trade.domain.vo.TimeInForce;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -169,6 +170,9 @@ public class MarketWorker {
             if (message.price() == null || message.quantity() == null) {
                 throw new IllegalArgumentException("limit place message 필수값이 누락되어 있습니다.");
             }
+            if (message.timeInForce() != null && message.timeInForce() != TimeInForce.GTC) {
+                throw new IllegalArgumentException("limit 주문은 GTC만 허용합니다.");
+            }
             return;
         }
 
@@ -178,6 +182,9 @@ public class MarketWorker {
             }
             if (message.orderSide() == OrderSide.ASK && message.quantity() == null) {
                 throw new IllegalArgumentException("market ask message 필수값이 누락되어 있습니다.");
+            }
+            if (message.timeInForce() != null && message.timeInForce() != TimeInForce.IOC) {
+                throw new IllegalArgumentException("market 주문은 IOC만 허용합니다.");
             }
             return;
         }

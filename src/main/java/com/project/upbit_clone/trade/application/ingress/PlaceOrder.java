@@ -62,6 +62,7 @@ public class PlaceOrder extends AbstractOrderIngress<PlaceOrder.Command> {
 
     @Override
     protected void validateBusiness(Command command, Market market, User user, String commandId) {
+        // TODO: 거래시 사용자의 지갑이 있는지 검증을 해야함.
         Order.create(new Order.CreateCommand(
                 market,
                 user,
@@ -77,12 +78,12 @@ public class PlaceOrder extends AbstractOrderIngress<PlaceOrder.Command> {
     }
 
     @Override
-    protected CommandMessage toCommandMessage(Long commandLogId, String commandId, Command command, String marketCode) {
+    protected CommandMessage toCommandMessage(Long commandLogId, String commandId, Command command, Market market) {
         return new CommandMessage.Place(
                 commandLogId,
                 command.userId(),
                 command.marketId(),
-                marketCode,
+                market.getMarketCode(),
                 command.clientOrderId(),
                 commandId,
                 command.orderSide(),
@@ -90,7 +91,8 @@ public class PlaceOrder extends AbstractOrderIngress<PlaceOrder.Command> {
                 command.timeInForce(),
                 command.price(),
                 command.quantity(),
-                command.quoteAmount()
+                command.quoteAmount(),
+                market.getBaseAsset().getDecimals().intValue()
         );
     }
 }

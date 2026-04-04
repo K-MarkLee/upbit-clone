@@ -1,8 +1,5 @@
 package com.project.upbit_clone.trade.application.engine.orderbook;
 
-import com.project.upbit_clone.global.domain.vo.PositiveAmount;
-import com.project.upbit_clone.global.exception.BusinessException;
-import com.project.upbit_clone.global.exception.ErrorCode;
 import com.project.upbit_clone.trade.application.engine.EngineException;
 import com.project.upbit_clone.trade.domain.vo.OrderSide;
 import lombok.Getter;
@@ -25,7 +22,7 @@ public class PriceLevel {
 
     private PriceLevel(OrderSide side, BigDecimal price) {
         this.side = side;
-        this.price = new PositiveAmount(price).value();
+        this.price = price;
         this.entries = new ArrayDeque<>();
         this.totalQty = BigDecimal.ZERO;
         this.orderCount = 0;
@@ -62,14 +59,16 @@ public class PriceLevel {
 
     // 선두 주문에 부분 체결을 적용하고 레벨 집계를 함께 갱신한다.
     public boolean applyExecution(BigDecimal executedQty) {
-        BigDecimal value = new PositiveAmount(executedQty).value();
+        if (executedQty == null || executedQty.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("executedQty는 0보다 커야 합니다.");
+        }
         BookOrderEntry entry = entries.peekFirst();
         if (entry == null) {
             throw new EngineException("체결할 선두 주문이 없습니다.");
         }
 
-        entry.decreaseRemainingQty(value);
-        totalQty = totalQty.subtract(value);
+        entry.decreaseRemainingQty(executedQty);
+        totalQty = totalQty.subtract(executedQty);
 
         if (entry.isFilled()) {
             BookOrderEntry removed = entries.pollFirst();
@@ -92,20 +91,23 @@ public class PriceLevel {
     // 생성 입력값 검증.
     private static void validateCreateInput(OrderSide side, BigDecimal price) {
         if (side == null || price == null) {
-            throw new BusinessException(ErrorCode.INVALID_ORDER_BOOK_INPUT);
+            throw new IllegalArgumentException("price level 필수값이 누락되어 있습니다.");
+        }
+        if (price.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("price는 0보다 커야 합니다.");
         }
     }
 
     // 엔트리와 레벨의 side/price 일치 여부 검증.
     private void validateEntry(BookOrderEntry entry) {
         if (entry == null) {
-            throw new BusinessException(ErrorCode.INVALID_ORDER_BOOK_INPUT);
+            throw new IllegalArgumentException("entry는 null일 수 없습니다.");
         }
         if (entry.getSide() != side) {
-            throw new BusinessException(ErrorCode.INVALID_ORDER_BOOK_INPUT);
+            throw new IllegalArgumentException("entry side가 price level과 일치하지 않습니다.");
         }
         if (entry.getPrice().compareTo(price) != 0) {
-            throw new BusinessException(ErrorCode.INVALID_ORDER_BOOK_INPUT);
+            throw new IllegalArgumentException("entry price가 price level과 일치하지 않습니다.");
         }
     }
 

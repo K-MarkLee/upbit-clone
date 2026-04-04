@@ -145,6 +145,7 @@ class PlaceOrderTest {
         assertThat(dispatched.commandLogId()).isEqualTo(100L);
         assertThat(dispatched.clientOrderId()).isEqualTo(command.clientOrderId());
         assertThat(dispatched.orderKey()).isEqualTo(appended.getCommandId());
+        assertThat(dispatched.baseAssetScale()).isEqualTo(activeMarket.getBaseAsset().getDecimals().intValue());
     }
 
     @Test
