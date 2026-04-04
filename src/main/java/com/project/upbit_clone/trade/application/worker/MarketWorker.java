@@ -4,8 +4,6 @@ import com.project.upbit_clone.trade.application.dispatch.CommandMessage;
 import com.project.upbit_clone.trade.application.engine.EngineResult;
 import com.project.upbit_clone.trade.application.engine.MatchingEngineCore;
 import com.project.upbit_clone.trade.application.engine.orderbook.InMemoryOrderBook;
-import com.project.upbit_clone.trade.domain.vo.OrderSide;
-import com.project.upbit_clone.trade.domain.vo.OrderType;
 import com.project.upbit_clone.trade.domain.vo.TimeInForce;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.math.BigDecimal;
 
 public class MarketWorker {
 
@@ -32,6 +31,7 @@ public class MarketWorker {
         this.orderBook = new InMemoryOrderBook();
     }
 
+    // 워커 시작
     public synchronized void start() {
         if (running) {
             return;
@@ -43,6 +43,7 @@ public class MarketWorker {
                 .start(this::runLoop);
     }
 
+    // 매칭 종료 interrupt
     public synchronized void shutdown() {
         if (!running) {
             return;
@@ -64,6 +65,7 @@ public class MarketWorker {
         mailbox.add(message);
     }
 
+    // 루프가 돌면서 메시지를 올바른 시장에 전달.
     private void runLoop() {
         while (running) {
             try {
@@ -90,6 +92,7 @@ public class MarketWorker {
         }
     }
 
+    // 주문 과 취소 분류
     private void dispatch(CommandMessage message) {
         switch (message) {
             case CommandMessage.Place place -> handlePlace(place);
@@ -97,6 +100,7 @@ public class MarketWorker {
         }
     }
 
+    // 주문처리
     private void handlePlace(CommandMessage.Place message) {
         EngineResult.PlaceResult result = matchingEngineCore.place(message, orderBook);
         log.debug(
@@ -110,6 +114,7 @@ public class MarketWorker {
         );
     }
 
+    // 취소처리
     private void handleCancel(CommandMessage.Cancel message) {
         boolean removed = orderBook.remove(message.targetOrderKey()).isPresent();
         log.debug(
@@ -165,31 +170,66 @@ public class MarketWorker {
                 || message.orderType() == null) {
             throw new IllegalArgumentException("place message 필수값이 누락되어 있습니다.");
         }
-
-        if (message.orderType() == OrderType.LIMIT) {
-            if (message.price() == null || message.quantity() == null) {
-                throw new IllegalArgumentException("limit place message 필수값이 누락되어 있습니다.");
-            }
-            if (message.timeInForce() != null && message.timeInForce() != TimeInForce.GTC) {
-                throw new IllegalArgumentException("limit 주문은 GTC만 허용합니다.");
-            }
-            return;
+        if (message.baseAssetScale() < 0) {
+            throw new IllegalArgumentException("baseAssetScale은 0 이상이어야 합니다.");
         }
 
-        if (message.orderType() == OrderType.MARKET) {
-            if (message.orderSide() == OrderSide.BID && message.quoteAmount() == null) {
-                throw new IllegalArgumentException("market bid message 필수값이 누락되어 있습니다.");
-            }
-            if (message.orderSide() == OrderSide.ASK && message.quantity() == null) {
-                throw new IllegalArgumentException("market ask message 필수값이 누락되어 있습니다.");
-            }
-            if (message.timeInForce() != null && message.timeInForce() != TimeInForce.IOC) {
-                throw new IllegalArgumentException("market 주문은 IOC만 허용합니다.");
-            }
-            return;
+        switch (message.orderType()) {
+            case LIMIT -> validateLimitPlace(message);
+            case MARKET -> validateMarketPlace(message);
+            default -> throw new IllegalArgumentException("지원하지 않는 orderType 입니다.");
+        }
+    }
+
+    private void validateLimitPlace(CommandMessage.Place message) {
+        if (message.price() == null || message.quantity() == null) {
+            throw new IllegalArgumentException("limit place message 필수값이 누락되어 있습니다.");
+        }
+        if (message.quoteAmount() != null) {
+            throw new IllegalArgumentException("limit 주문은 quoteAmount를 허용하지 않습니다.");
+        }
+        if (message.timeInForce() != TimeInForce.GTC) {
+            throw new IllegalArgumentException("limit 주문은 GTC만 허용합니다.");
+        }
+        validatePositive(message.price(), "limit 주문의 price는 0보다 커야 합니다.");
+        validatePositive(message.quantity(), "limit 주문의 quantity는 0보다 커야 합니다.");
+    }
+
+    private void validateMarketPlace(CommandMessage.Place message) {
+        if (message.timeInForce() != TimeInForce.IOC) {
+            throw new IllegalArgumentException("market 주문은 IOC만 허용합니다.");
         }
 
-        throw new IllegalArgumentException("지원하지 않는 orderType 입니다.");
+        switch (message.orderSide()) {
+            case BID -> validateMarketBidPlace(message);
+            case ASK -> validateMarketAskPlace(message);
+        }
+    }
+
+    private void validateMarketBidPlace(CommandMessage.Place message) {
+        if (message.quoteAmount() == null) {
+            throw new IllegalArgumentException("market bid message 필수값이 누락되어 있습니다.");
+        }
+        if (message.price() != null || message.quantity() != null) {
+            throw new IllegalArgumentException("market bid 주문은 price와 quantity를 허용하지 않습니다.");
+        }
+        validatePositive(message.quoteAmount(), "market bid 주문의 quoteAmount는 0보다 커야 합니다.");
+    }
+
+    private void validateMarketAskPlace(CommandMessage.Place message) {
+        if (message.quantity() == null) {
+            throw new IllegalArgumentException("market ask message 필수값이 누락되어 있습니다.");
+        }
+        if (message.price() != null || message.quoteAmount() != null) {
+            throw new IllegalArgumentException("market ask 주문은 price와 quoteAmount를 허용하지 않습니다.");
+        }
+        validatePositive(message.quantity(), "market ask 주문의 quantity는 0보다 커야 합니다.");
+    }
+
+    private void validatePositive(BigDecimal value, String message) {
+        if (value == null || value.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException(message);
+        }
     }
 
     private void validateCancel(CommandMessage.Cancel message) {

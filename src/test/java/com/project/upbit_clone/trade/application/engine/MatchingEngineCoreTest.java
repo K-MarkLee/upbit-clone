@@ -11,12 +11,8 @@ import com.project.upbit_clone.trade.domain.vo.TimeInForce;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 
 import java.math.BigDecimal;
-import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -25,310 +21,590 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class MatchingEngineCoreTest {
 
     private MatchingEngineCore matchingEngineCore;
+    private Long userId;
+    private Long marketId;
+    private String marketCode;
+    private int baseAssetScale;
+    private long nextCommandLogId;
 
     @BeforeEach
     void setUp() {
         matchingEngineCore = new MatchingEngineCore();
-    }
-
-    @ParameterizedTest(name = "[{index}] {0}")
-    @MethodSource("limitGtcNoMatchCases")
-    @DisplayName("Happy : LIMIT GTC 주문이 무체결이면 OPEN 상태로 resting 된다.")
-    void place_limit_gtc_without_match_returns_open_and_adds_resting_order(
-            String caseName,
-            InMemoryOrderBook orderBook,
-            CommandMessage.Place message,
-            OrderSide expectedRestingSide,
-            BigDecimal expectedRestingPrice,
-            BigDecimal expectedRemainingQuantity
-    ) {
-        // when
-        EngineResult.PlaceResult result = matchingEngineCore.place(message, orderBook);
-        PriceLevel.Snapshot restingLevel = getRequiredLevelSnapshot(
-                orderBook,
-                expectedRestingSide,
-                expectedRestingPrice
-        );
-        EngineResult.BookDelta bookDelta = result.bookDeltas().getFirst();
-        InMemoryOrderBook.LevelDelta levelDelta = bookDelta.delta();
-
-        // then
-        assertThat(result.takerStatus()).isEqualTo(OrderStatus.OPEN);
-        assertThat(result.executedQuantity()).isEqualByComparingTo("0");
-        assertThat(result.executedQuoteAmount()).isEqualByComparingTo("0");
-        assertThat(result.remainingQuantity()).isEqualByComparingTo(expectedRemainingQuantity);
-        assertThat(result.unlockAmount()).isEqualByComparingTo("0");
-        assertThat(result.cancelReason()).isNull();
-        assertThat(result.fills()).isEmpty();
-        assertThat(result.bookDeltas()).hasSize(1);
-        assertThat(bookDelta.reason()).isEqualTo(EngineResult.BookDeltaReason.RESTING_ORDER_ADDED);
-        assertThat(levelDelta.side()).isEqualTo(expectedRestingSide);
-        assertThat(levelDelta.price()).isEqualByComparingTo(expectedRestingPrice);
-        assertThat(levelDelta.before().totalQty()).isEqualByComparingTo("0");
-        assertThat(levelDelta.before().orderCount()).isZero();
-        assertThat(levelDelta.after().totalQty()).isEqualByComparingTo(expectedRemainingQuantity);
-        assertThat(levelDelta.after().orderCount()).isEqualTo(1);
-        assertThat(restingLevel.totalQty()).isEqualByComparingTo(expectedRemainingQuantity);
-        assertThat(restingLevel.orderCount()).isEqualTo(1);
-    }
-
-    private static Stream<Arguments> limitGtcNoMatchCases() {
-        return Stream.of(
-                Arguments.of(
-                        "반대편 호가가 없으면 BID LIMIT GTC는 resting 된다.",
-                        new InMemoryOrderBook(),
-                        createLimitPlaceMessage(1L, OrderSide.BID, "1000", "2"),
-                        OrderSide.BID,
-                        new BigDecimal("1000"),
-                        new BigDecimal("2")
-                ),
-                Arguments.of(
-                        "반대편 호가가 없으면 ASK LIMIT GTC는 resting 된다.",
-                        new InMemoryOrderBook(),
-                        createLimitPlaceMessage(2L, OrderSide.ASK, "1000", "2"),
-                        OrderSide.ASK,
-                        new BigDecimal("1000"),
-                        new BigDecimal("2")
-                ),
-                Arguments.of(
-                        "best ask가 더 높아 가격이 안 교차되면 BID LIMIT GTC는 resting 된다.",
-                        orderBookWithLevel(201L, OrderSide.ASK, "1100", "1"),
-                        createLimitPlaceMessage(3L, OrderSide.BID, "1000", "2"),
-                        OrderSide.BID,
-                        new BigDecimal("1000"),
-                        new BigDecimal("2")
-                ),
-                Arguments.of(
-                        "best bid가 더 낮아 가격이 안 교차되면 ASK LIMIT GTC는 resting 된다.",
-                        orderBookWithLevel(202L, OrderSide.BID, "900", "1"),
-                        createLimitPlaceMessage(4L, OrderSide.ASK, "1000", "2"),
-                        OrderSide.ASK,
-                        new BigDecimal("1000"),
-                        new BigDecimal("2")
-                )
-        );
+        userId = 10L;
+        marketId = 100L;
+        marketCode = "KRW-BTC";
+        baseAssetScale = 8;
+        nextCommandLogId = 1L;
     }
 
     @Test
-    @DisplayName("Happy : 반대편 호가가 없으면 MARKET 주문은 CANCELED 결과를 반환한다.")
-    void place_market_without_opposite_book_returns_canceled() {
+    @DisplayName("Happy : LIMIT-BID 주문은 교차 ask가 있으면 거래에 성공한다.")
+    void place_limit_bid_with_crossed_ask_returns_filled() {
         // given
-        InMemoryOrderBook orderBook = new InMemoryOrderBook();
-        CommandMessage.Place message = new CommandMessage.Place(
-                1L,
-                10L,
-                100L,
-                "KRW-BTC",
-                "cid-1",
-                OrderSide.BID,
-                OrderType.MARKET,
-                TimeInForce.IOC,
-                null,
-                null,
-                new BigDecimal("10000")
+        InMemoryOrderBook orderBook = orderBook(maker(101L, OrderSide.ASK, "900", "2"));
+        CommandMessage.Place message = limitBid("1000", "2");
+
+        // when
+        EngineResult.PlaceResult result = matchingEngineCore.place(message, orderBook);
+
+        // then
+        assertFilledResult(result, "2", "1800", "200");
+        assertSingleFill(result, orderKey(101L), "900", "2", "1800");
+        assertSingleMatchDelta(result, OrderSide.ASK, "900", "2");
+        assertThat(orderBook.findOrder(orderKey(101L))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Happy : LIMIT-ASK 주문은 교차 bid가 있으면 거래에 성공한다.")
+    void place_limit_ask_with_crossed_bid_returns_filled() {
+        // given
+        InMemoryOrderBook orderBook = orderBook(maker(102L, OrderSide.BID, "1100", "2"));
+        CommandMessage.Place message = limitAsk("1000", "2");
+
+        // when
+        EngineResult.PlaceResult result = matchingEngineCore.place(message, orderBook);
+
+        // then
+        assertFilledResult(result, "2", "2200", "0");
+        assertSingleFill(result, orderKey(102L), "1100", "2", "2200");
+        assertSingleMatchDelta(result, OrderSide.BID, "1100", "2");
+        assertThat(orderBook.findOrder(orderKey(102L))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Happy : MARKET-BID 주문은 체결 가능한 금액이 있으면 거래에 성공한다.")
+    void place_market_bid_with_executable_quote_returns_filled() {
+        // given
+        InMemoryOrderBook orderBook = orderBook(maker(103L, OrderSide.ASK, "7", "2"));
+        CommandMessage.Place message = marketBid("14");
+
+        // when
+        EngineResult.PlaceResult result = matchingEngineCore.place(message, orderBook);
+
+        // then
+        assertFilledResult(result, "2", "14", "0");
+        assertSingleFill(result, orderKey(103L), "7", "2", "14");
+        assertSingleMatchDelta(result, OrderSide.ASK, "7", "2");
+        assertThat(orderBook.findOrder(orderKey(103L))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Happy : MARKET-ASK 주문은 교차 bid가 있으면 거래에 성공한다.")
+    void place_market_ask_with_crossed_bid_returns_filled() {
+        // given
+        InMemoryOrderBook orderBook = orderBook(maker(104L, OrderSide.BID, "1000", "2"));
+        CommandMessage.Place message = marketAsk("2");
+
+        // when
+        EngineResult.PlaceResult result = matchingEngineCore.place(message, orderBook);
+
+        // then
+        assertFilledResult(result, "2", "2000", "0");
+        assertSingleFill(result, orderKey(104L), "1000", "2", "2000");
+        assertSingleMatchDelta(result, OrderSide.BID, "1000", "2");
+        assertThat(orderBook.findOrder(orderKey(104L))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Happy : LIMIT-BID 주문은 여러 ask maker를 순차 체결할 수 있다.")
+    void place_limit_bid_with_multiple_crossed_asks_returns_filled() {
+        // given
+        InMemoryOrderBook orderBook = orderBook(
+                maker(105L, OrderSide.ASK, "900", "2"),
+                maker(106L, OrderSide.ASK, "950", "3")
         );
+        CommandMessage.Place message = limitBid("1000", "5");
+
+        // when
+        EngineResult.PlaceResult result = matchingEngineCore.place(message, orderBook);
+
+        // then
+        assertThat(result.takerStatus()).isEqualTo(OrderStatus.FILLED);
+        assertThat(result.executedQuantity()).isEqualByComparingTo("5");
+        assertThat(result.executedQuoteAmount()).isEqualByComparingTo("4650");
+        assertThat(result.remainingQuantity()).isEqualByComparingTo("0");
+        assertThat(result.unlockAmount()).isEqualByComparingTo("350");
+        assertThat(result.cancelReason()).isNull();
+        assertThat(result.fills()).hasSize(2);
+        assertThat(result.bookDeltas()).hasSize(2);
+
+        assertFillAt(result, 0, orderKey(105L), "900", "2", "1800", "0");
+        assertFillAt(result, 1, orderKey(106L), "950", "3", "2850", "0");
+        assertMatchDeltaAt(result, 0, OrderSide.ASK, "900", "2", 1, "0", 0);
+        assertMatchDeltaAt(result, 1, OrderSide.ASK, "950", "3", 1, "0", 0);
+        assertThat(orderBook.findOrder(orderKey(105L))).isEmpty();
+        assertThat(orderBook.findOrder(orderKey(106L))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Negative : LIMIT-BID 주문은 교차 ask가 없으면 resting 된다.")
+    void place_limit_bid_without_crossed_ask_returns_open() {
+        // given
+        InMemoryOrderBook orderBook = orderBook(maker(201L, OrderSide.ASK, "1100", "2"));
+        CommandMessage.Place message = limitBid("1000", "2");
+
+        // when
+        EngineResult.PlaceResult result = matchingEngineCore.place(message, orderBook);
+
+        // then
+        assertOpenWithoutExecution(result, "2");
+        assertSingleRestingDelta(result, OrderSide.BID, "1000", "2");
+        assertRestingOrder(orderBook, message.orderKey(), OrderSide.BID, "1000", "2");
+        assertThat(requiredLevelSnapshot(orderBook, OrderSide.ASK, decimal("1100")).totalQty())
+                .isEqualByComparingTo("2");
+    }
+
+    @Test
+    @DisplayName("Negative : LIMIT-ASK 주문은 교차 bid가 없으면 resting 된다.")
+    void place_limit_ask_without_crossed_bid_returns_open() {
+        // given
+        InMemoryOrderBook orderBook = orderBook(maker(202L, OrderSide.BID, "900", "2"));
+        CommandMessage.Place message = limitAsk("1000", "2");
+
+        // when
+        EngineResult.PlaceResult result = matchingEngineCore.place(message, orderBook);
+
+        // then
+        assertOpenWithoutExecution(result, "2");
+        assertSingleRestingDelta(result, OrderSide.ASK, "1000", "2");
+        assertRestingOrder(orderBook, message.orderKey(), OrderSide.ASK, "1000", "2");
+        assertThat(requiredLevelSnapshot(orderBook, OrderSide.BID, decimal("900")).totalQty())
+                .isEqualByComparingTo("2");
+    }
+
+    @Test
+    @DisplayName("Negative : LIMIT-BID 주문은 일부 체결 후 잔량을 오더북에 resting 한다.")
+    void place_limit_bid_with_partial_execution_rests_remaining_quantity() {
+        // given
+        InMemoryOrderBook orderBook = orderBook(
+                maker(205L, OrderSide.ASK, "900", "2"),
+                maker(206L, OrderSide.ASK, "950", "1")
+        );
+        CommandMessage.Place message = limitBid("1000", "5");
+
+        // when
+        EngineResult.PlaceResult result = matchingEngineCore.place(message, orderBook);
+
+        // then
+        assertThat(result.takerStatus()).isEqualTo(OrderStatus.OPEN);
+        assertThat(result.executedQuantity()).isEqualByComparingTo("3");
+        assertThat(result.executedQuoteAmount()).isEqualByComparingTo("2750");
+        assertThat(result.remainingQuantity()).isEqualByComparingTo("2");
+        assertThat(result.unlockAmount()).isEqualByComparingTo("250");
+        assertThat(result.cancelReason()).isNull();
+        assertThat(result.fills()).hasSize(2);
+        assertThat(result.bookDeltas()).hasSize(3);
+
+        assertFillAt(result, 0, orderKey(205L), "900", "2", "1800", "0");
+        assertFillAt(result, 1, orderKey(206L), "950", "1", "950", "0");
+        assertMatchDeltaAt(result, 0, OrderSide.ASK, "900", "2", 1, "0", 0);
+        assertMatchDeltaAt(result, 1, OrderSide.ASK, "950", "1", 1, "0", 0);
+        assertRestingDeltaAt(result, 2, OrderSide.BID, "1000", "0", 0, "2", 1);
+        assertRestingOrder(orderBook, message.orderKey(), OrderSide.BID, "1000", "2");
+        assertThat(orderBook.findOrder(orderKey(205L))).isEmpty();
+        assertThat(orderBook.findOrder(orderKey(206L))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Negative : MARKET-BID 주문은 최소 체결 수량을 만들 수 없으면 실패한다.")
+    void place_market_bid_without_executable_quote_returns_canceled() {
+        // given
+        InMemoryOrderBook orderBook = orderBook(maker(203L, OrderSide.ASK, "7", "5"));
+        CommandMessage.Place message = marketBid("3", 0);
+
+        // when
+        EngineResult.PlaceResult result = matchingEngineCore.place(message, orderBook);
+
+        // then
+        assertCanceledWithoutExecution(result, null, "3", EngineResult.CancelReason.IOC_NOT_MATCHED);
+        assertThat(orderBook.findOrder(orderKey(203L))).isPresent();
+        assertThat(requiredLevelSnapshot(orderBook, OrderSide.ASK, decimal("7")).totalQty())
+                .isEqualByComparingTo("5");
+    }
+
+    @Test
+    @DisplayName("Negative : MARKET-BID 주문은 여러 ask maker를 체결하고 남은 금액을 IOC remainder로 취소한다.")
+    void place_market_bid_with_multiple_asks_returns_canceled_with_ioc_remainder() {
+        // given
+        InMemoryOrderBook orderBook = orderBook(
+                maker(207L, OrderSide.ASK, "7", "1"),
+                maker(208L, OrderSide.ASK, "8", "1")
+        );
+        CommandMessage.Place message = marketBid("20");
 
         // when
         EngineResult.PlaceResult result = matchingEngineCore.place(message, orderBook);
 
         // then
         assertThat(result.takerStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(result.executedQuantity()).isEqualByComparingTo("2");
+        assertThat(result.executedQuoteAmount()).isEqualByComparingTo("15");
+        assertThat(result.remainingQuantity()).isNull();
+        assertThat(result.unlockAmount()).isEqualByComparingTo("5");
+        assertThat(result.cancelReason()).isEqualTo(EngineResult.CancelReason.IOC_REMAINDER);
+        assertThat(result.fills()).hasSize(2);
+        assertThat(result.bookDeltas()).hasSize(2);
+
+        assertFillAt(result, 0, orderKey(207L), "7", "1", "7", "0");
+        assertFillAt(result, 1, orderKey(208L), "8", "1", "8", "0");
+        assertMatchDeltaAt(result, 0, OrderSide.ASK, "7", "1", 1, "0", 0);
+        assertMatchDeltaAt(result, 1, OrderSide.ASK, "8", "1", 1, "0", 0);
+        assertThat(orderBook.findOrder(orderKey(207L))).isEmpty();
+        assertThat(orderBook.findOrder(orderKey(208L))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Negative : MARKET-ASK 주문은 반대편 bid가 없으면 실패한다.")
+    void place_market_ask_without_bid_book_returns_canceled() {
+        // given
+        InMemoryOrderBook orderBook = new InMemoryOrderBook();
+        CommandMessage.Place message = marketAsk("2");
+
+        // when
+        EngineResult.PlaceResult result = matchingEngineCore.place(message, orderBook);
+
+        // then
+        assertCanceledWithoutExecution(result, "2", "2", EngineResult.CancelReason.NO_TRADE_STREAM);
+        assertThat(orderBook.getBestBidHead()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Negative : MARKET-ASK 주문은 여러 bid maker를 체결하고 남은 수량을 IOC remainder로 취소한다.")
+    void place_market_ask_with_multiple_bids_returns_canceled_with_ioc_remainder() {
+        // given
+        InMemoryOrderBook orderBook = orderBook(
+                maker(209L, OrderSide.BID, "1100", "2"),
+                maker(210L, OrderSide.BID, "1000", "1")
+        );
+        CommandMessage.Place message = marketAsk("4");
+
+        // when
+        EngineResult.PlaceResult result = matchingEngineCore.place(message, orderBook);
+
+        // then
+        assertThat(result.takerStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(result.executedQuantity()).isEqualByComparingTo("3");
+        assertThat(result.executedQuoteAmount()).isEqualByComparingTo("3200");
+        assertThat(result.remainingQuantity()).isEqualByComparingTo("1");
+        assertThat(result.unlockAmount()).isEqualByComparingTo("1");
+        assertThat(result.cancelReason()).isEqualTo(EngineResult.CancelReason.IOC_REMAINDER);
+        assertThat(result.fills()).hasSize(2);
+        assertThat(result.bookDeltas()).hasSize(2);
+
+        assertFillAt(result, 0, orderKey(209L), "1100", "2", "2200", "0");
+        assertFillAt(result, 1, orderKey(210L), "1000", "1", "1000", "0");
+        assertMatchDeltaAt(result, 0, OrderSide.BID, "1100", "2", 1, "0", 0);
+        assertMatchDeltaAt(result, 1, OrderSide.BID, "1000", "1", 1, "0", 0);
+        assertThat(orderBook.findOrder(orderKey(209L))).isEmpty();
+        assertThat(orderBook.findOrder(orderKey(210L))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Negative : message가 null이면 NullPointerException을 반환한다.")
+    void place_with_null_message() {
+        // given
+        InMemoryOrderBook orderBook = new InMemoryOrderBook();
+
+        // when & then
+        assertThatThrownBy(() -> matchingEngineCore.place(null, orderBook))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("message는 null일 수 없습니다.");
+    }
+
+    @Test
+    @DisplayName("Negative : orderBook이 null이면 NullPointerException을 반환한다.")
+    void place_with_null_order_book() {
+        // given
+        CommandMessage.Place message = limitBid("1000", "2");
+
+        // when & then
+        assertThatThrownBy(() -> matchingEngineCore.place(message, null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("orderBook은 null일 수 없습니다.");
+    }
+
+    private void assertFilledResult(
+            EngineResult.PlaceResult result,
+            String executedQuantity,
+            String executedQuoteAmount,
+            String unlockAmount
+    ) {
+        assertThat(result.takerStatus()).isEqualTo(OrderStatus.FILLED);
+        assertThat(result.executedQuantity()).isEqualByComparingTo(executedQuantity);
+        assertThat(result.executedQuoteAmount()).isEqualByComparingTo(executedQuoteAmount);
+        assertThat(result.remainingQuantity()).isEqualByComparingTo("0");
+        assertThat(result.unlockAmount()).isEqualByComparingTo(unlockAmount);
+        assertThat(result.cancelReason()).isNull();
+        assertThat(result.fills()).hasSize(1);
+        assertThat(result.bookDeltas()).hasSize(1);
+    }
+
+    private void assertSingleFill(
+            EngineResult.PlaceResult result,
+            String makerOrderKey,
+            String price,
+            String executedQuantity,
+            String executedQuoteAmount
+    ) {
+        EngineResult.Fill fill = result.fills().getFirst();
+
+        assertThat(fill.makerOrderKey()).isEqualTo(makerOrderKey);
+        assertThat(fill.price()).isEqualByComparingTo(price);
+        assertThat(fill.executedQuantity()).isEqualByComparingTo(executedQuantity);
+        assertThat(fill.executedQuoteAmount()).isEqualByComparingTo(executedQuoteAmount);
+        assertThat(fill.makerRemainingQuantity()).isEqualByComparingTo("0");
+    }
+
+    private void assertFillAt(
+            EngineResult.PlaceResult result,
+            int index,
+            String makerOrderKey,
+            String price,
+            String executedQuantity,
+            String executedQuoteAmount,
+            String makerRemainingQuantity
+    ) {
+        EngineResult.Fill fill = result.fills().get(index);
+
+        assertThat(fill.makerOrderKey()).isEqualTo(makerOrderKey);
+        assertThat(fill.price()).isEqualByComparingTo(price);
+        assertThat(fill.executedQuantity()).isEqualByComparingTo(executedQuantity);
+        assertThat(fill.executedQuoteAmount()).isEqualByComparingTo(executedQuoteAmount);
+        assertThat(fill.makerRemainingQuantity()).isEqualByComparingTo(makerRemainingQuantity);
+    }
+
+    private void assertSingleMatchDelta(
+            EngineResult.PlaceResult result,
+            OrderSide matchedSide,
+            String matchedPrice,
+            String beforeQuantity
+    ) {
+        EngineResult.BookDelta bookDelta = result.bookDeltas().getFirst();
+        InMemoryOrderBook.LevelDelta levelDelta = bookDelta.delta();
+
+        assertThat(bookDelta.reason()).isEqualTo(EngineResult.BookDeltaReason.MATCH_EXECUTED);
+        assertThat(levelDelta.side()).isEqualTo(matchedSide);
+        assertThat(levelDelta.price()).isEqualByComparingTo(matchedPrice);
+        assertThat(levelDelta.before().totalQty()).isEqualByComparingTo(beforeQuantity);
+        assertThat(levelDelta.before().orderCount()).isEqualTo(1);
+        assertThat(levelDelta.after().totalQty()).isEqualByComparingTo("0");
+        assertThat(levelDelta.after().orderCount()).isZero();
+    }
+
+    private void assertMatchDeltaAt(
+            EngineResult.PlaceResult result,
+            int index,
+            OrderSide matchedSide,
+            String matchedPrice,
+            String beforeQuantity,
+            int beforeOrderCount,
+            String afterQuantity,
+            int afterOrderCount
+    ) {
+        EngineResult.BookDelta bookDelta = result.bookDeltas().get(index);
+        InMemoryOrderBook.LevelDelta levelDelta = bookDelta.delta();
+
+        assertThat(bookDelta.reason()).isEqualTo(EngineResult.BookDeltaReason.MATCH_EXECUTED);
+        assertThat(levelDelta.side()).isEqualTo(matchedSide);
+        assertThat(levelDelta.price()).isEqualByComparingTo(matchedPrice);
+        assertThat(levelDelta.before().totalQty()).isEqualByComparingTo(beforeQuantity);
+        assertThat(levelDelta.before().orderCount()).isEqualTo(beforeOrderCount);
+        assertThat(levelDelta.after().totalQty()).isEqualByComparingTo(afterQuantity);
+        assertThat(levelDelta.after().orderCount()).isEqualTo(afterOrderCount);
+    }
+
+    private void assertOpenWithoutExecution(EngineResult.PlaceResult result, String remainingQuantity) {
+        assertThat(result.takerStatus()).isEqualTo(OrderStatus.OPEN);
         assertThat(result.executedQuantity()).isEqualByComparingTo("0");
         assertThat(result.executedQuoteAmount()).isEqualByComparingTo("0");
-        assertThat(result.remainingQuantity()).isNull();
-        assertThat(result.unlockAmount()).isEqualByComparingTo("10000");
-        assertThat(result.cancelReason()).isEqualTo(EngineResult.CancelReason.NO_TRADE_STREAM);
+        assertThat(result.remainingQuantity()).isEqualByComparingTo(remainingQuantity);
+        assertThat(result.unlockAmount()).isEqualByComparingTo("0");
+        assertThat(result.cancelReason()).isNull();
+        assertThat(result.fills()).isEmpty();
+        assertThat(result.bookDeltas()).hasSize(1);
+    }
+
+    private void assertSingleRestingDelta(
+            EngineResult.PlaceResult result,
+            OrderSide restingSide,
+            String restingPrice,
+            String remainingQuantity
+    ) {
+        EngineResult.BookDelta bookDelta = result.bookDeltas().getFirst();
+        InMemoryOrderBook.LevelDelta levelDelta = bookDelta.delta();
+
+        assertThat(bookDelta.reason()).isEqualTo(EngineResult.BookDeltaReason.RESTING_ORDER_ADDED);
+        assertThat(levelDelta.side()).isEqualTo(restingSide);
+        assertThat(levelDelta.price()).isEqualByComparingTo(restingPrice);
+        assertThat(levelDelta.before().totalQty()).isEqualByComparingTo("0");
+        assertThat(levelDelta.before().orderCount()).isZero();
+        assertThat(levelDelta.after().totalQty()).isEqualByComparingTo(remainingQuantity);
+        assertThat(levelDelta.after().orderCount()).isEqualTo(1);
+    }
+
+    private void assertRestingDeltaAt(
+            EngineResult.PlaceResult result,
+            int index,
+            OrderSide restingSide,
+            String restingPrice,
+            String beforeQuantity,
+            int beforeOrderCount,
+            String afterQuantity,
+            int afterOrderCount
+    ) {
+        EngineResult.BookDelta bookDelta = result.bookDeltas().get(index);
+        InMemoryOrderBook.LevelDelta levelDelta = bookDelta.delta();
+
+        assertThat(bookDelta.reason()).isEqualTo(EngineResult.BookDeltaReason.RESTING_ORDER_ADDED);
+        assertThat(levelDelta.side()).isEqualTo(restingSide);
+        assertThat(levelDelta.price()).isEqualByComparingTo(restingPrice);
+        assertThat(levelDelta.before().totalQty()).isEqualByComparingTo(beforeQuantity);
+        assertThat(levelDelta.before().orderCount()).isEqualTo(beforeOrderCount);
+        assertThat(levelDelta.after().totalQty()).isEqualByComparingTo(afterQuantity);
+        assertThat(levelDelta.after().orderCount()).isEqualTo(afterOrderCount);
+    }
+
+    private void assertRestingOrder(
+            InMemoryOrderBook orderBook,
+            String orderKey,
+            OrderSide side,
+            String price,
+            String quantity
+    ) {
+        assertThat(orderBook.findOrder(orderKey)).isPresent();
+        assertThat(orderBook.findOrder(orderKey).orElseThrow().getRemainingQty())
+                .isEqualByComparingTo(quantity);
+
+        PriceLevel.Snapshot levelSnapshot = requiredLevelSnapshot(orderBook, side, decimal(price));
+        assertThat(levelSnapshot.totalQty()).isEqualByComparingTo(quantity);
+        assertThat(levelSnapshot.orderCount()).isEqualTo(1);
+    }
+
+    private void assertCanceledWithoutExecution(
+            EngineResult.PlaceResult result,
+            String remainingQuantity,
+            String unlockAmount,
+            EngineResult.CancelReason cancelReason
+    ) {
+        assertThat(result.takerStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(result.executedQuantity()).isEqualByComparingTo("0");
+        assertThat(result.executedQuoteAmount()).isEqualByComparingTo("0");
+        if (remainingQuantity == null) {
+            assertThat(result.remainingQuantity()).isNull();
+        } else {
+            assertThat(result.remainingQuantity()).isEqualByComparingTo(remainingQuantity);
+        }
+        assertThat(result.unlockAmount()).isEqualByComparingTo(unlockAmount);
+        assertThat(result.cancelReason()).isEqualTo(cancelReason);
         assertThat(result.fills()).isEmpty();
         assertThat(result.bookDeltas()).isEmpty();
     }
 
-    @ParameterizedTest(name = "[{index}] {0}")
-    @MethodSource("nullRequiredPlaceInputs")
-    @DisplayName("Negative : place 입력값이 null이면 NullPointerException을 반환한다.")
-    void place_with_null_required_inputs(
-            String caseName,
-            CommandMessage.Place message,
-            InMemoryOrderBook orderBook,
-            String expectedMessage
-    ) {
-        // when & then
-        assertThatThrownBy(() -> matchingEngineCore.place(message, orderBook))
-                .isInstanceOf(NullPointerException.class)
-                .hasMessage(expectedMessage);
-    }
-
-    private static Stream<Arguments> nullRequiredPlaceInputs() {
-        InMemoryOrderBook orderBook = new InMemoryOrderBook();
-        CommandMessage.Place message = createLimitPlaceMessage(1L, OrderSide.BID, "1000", "2");
-
-        return Stream.of(
-                Arguments.of("message null", null, orderBook, "message는 null일 수 없습니다."),
-                Arguments.of("orderBook null", message, null, "orderBook은 null일 수 없습니다.")
-        );
-    }
-
-    @ParameterizedTest(name = "[{index}] {0}")
-    @MethodSource("limitGtcSingleMakerFilledCases")
-    @DisplayName("Happy : LIMIT GTC 주문이 단일 maker와 교차되면 FILLED 상태로 전량 체결된다.")
-    void place_limit_gtc_with_single_maker_returns_filled_and_consumes_best_level(
-            String caseName,
-            InMemoryOrderBook orderBook,
-            CommandMessage.Place message,
-            Long expectedMakerOrderId,
-            OrderSide expectedMatchedSide,
-            BigDecimal expectedMatchedPrice,
-            BigDecimal expectedExecutedQuantity,
-            BigDecimal expectedExecutedQuoteAmount,
-            BigDecimal expectedMakerRemainingQuantity,
-            BigDecimal expectedLevelAfterQuantity,
-            int expectedLevelAfterOrderCount
-    ) {
-        // when
-        EngineResult.PlaceResult result = matchingEngineCore.place(message, orderBook);
-        EngineResult.Fill fill = result.fills().getFirst();
-        EngineResult.BookDelta bookDelta = result.bookDeltas().getFirst();
-        InMemoryOrderBook.LevelDelta levelDelta = bookDelta.delta();
-
-        // then
-        assertThat(result.takerStatus()).isEqualTo(OrderStatus.FILLED);
-        assertThat(result.executedQuantity()).isEqualByComparingTo(expectedExecutedQuantity);
-        assertThat(result.executedQuoteAmount()).isEqualByComparingTo(expectedExecutedQuoteAmount);
-        assertThat(result.remainingQuantity()).isEqualByComparingTo("0");
-        assertThat(result.unlockAmount()).isEqualByComparingTo("0");
-        assertThat(result.cancelReason()).isNull();
-        assertThat(result.fills()).hasSize(1);
-        assertThat(fill.makerOrderId()).isEqualTo(expectedMakerOrderId);
-        assertThat(fill.price()).isEqualByComparingTo(expectedMatchedPrice);
-        assertThat(fill.executedQuantity()).isEqualByComparingTo(expectedExecutedQuantity);
-        assertThat(fill.executedQuoteAmount()).isEqualByComparingTo(expectedExecutedQuoteAmount);
-        assertThat(fill.makerRemainingQuantity()).isEqualByComparingTo(expectedMakerRemainingQuantity);
-        assertThat(result.bookDeltas()).hasSize(1);
-        assertThat(bookDelta.reason()).isEqualTo(EngineResult.BookDeltaReason.MATCH_EXECUTED);
-        assertThat(levelDelta.side()).isEqualTo(expectedMatchedSide);
-        assertThat(levelDelta.price()).isEqualByComparingTo(expectedMatchedPrice);
-        assertThat(levelDelta.before().totalQty()).isEqualByComparingTo(
-                expectedExecutedQuantity.add(expectedMakerRemainingQuantity)
-        );
-        assertThat(levelDelta.before().orderCount()).isEqualTo(1);
-        assertThat(levelDelta.after().totalQty()).isEqualByComparingTo(expectedLevelAfterQuantity);
-        assertThat(levelDelta.after().orderCount()).isEqualTo(expectedLevelAfterOrderCount);
-
-        if (expectedLevelAfterOrderCount == 0) {
-            assertThat(orderBook.getLevelSnapshot(expectedMatchedSide, expectedMatchedPrice)).isEmpty();
-            assertThat(orderBook.findOrder(expectedMakerOrderId)).isEmpty();
-            return;
-        }
-
-        PriceLevel.Snapshot remainingLevel = getRequiredLevelSnapshot(
-                orderBook,
-                expectedMatchedSide,
-                expectedMatchedPrice
-        );
-        assertThat(orderBook.findOrder(expectedMakerOrderId)).isPresent();
-        assertThat(orderBook.findOrder(expectedMakerOrderId).orElseThrow().getRemainingQty())
-                .isEqualByComparingTo(expectedMakerRemainingQuantity);
-        assertThat(remainingLevel.totalQty()).isEqualByComparingTo(expectedLevelAfterQuantity);
-        assertThat(remainingLevel.orderCount()).isEqualTo(expectedLevelAfterOrderCount);
-    }
-
-    private static Stream<Arguments> limitGtcSingleMakerFilledCases() {
-        return Stream.of(
-                Arguments.of(
-                        "BID LIMIT GTC는 단일 ASK maker와 교차되면 maker 가격으로 전량 체결된다.",
-                        orderBookWithLevel(301L, OrderSide.ASK, "900", "2"),
-                        createLimitPlaceMessage(11L, OrderSide.BID, "1000", "2"),
-                        301L,
-                        OrderSide.ASK,
-                        new BigDecimal("900"),
-                        new BigDecimal("2"),
-                        new BigDecimal("1800"),
-                        BigDecimal.ZERO,
-                        BigDecimal.ZERO,
-                        0
-                ),
-                Arguments.of(
-                        "ASK LIMIT GTC는 단일 BID maker와 교차되면 maker 가격으로 전량 체결된다.",
-                        orderBookWithLevel(302L, OrderSide.BID, "1100", "2"),
-                        createLimitPlaceMessage(12L, OrderSide.ASK, "1000", "2"),
-                        302L,
-                        OrderSide.BID,
-                        new BigDecimal("1100"),
-                        new BigDecimal("2"),
-                        new BigDecimal("2200"),
-                        BigDecimal.ZERO,
-                        BigDecimal.ZERO,
-                        0
-                ),
-                Arguments.of(
-                        "BID LIMIT GTC는 단일 ASK maker의 일부만 체결해도 taker가 종료되면 FILLED다.",
-                        orderBookWithLevel(303L, OrderSide.ASK, "900", "5"),
-                        createLimitPlaceMessage(13L, OrderSide.BID, "1000", "2"),
-                        303L,
-                        OrderSide.ASK,
-                        new BigDecimal("900"),
-                        new BigDecimal("2"),
-                        new BigDecimal("1800"),
-                        new BigDecimal("3"),
-                        new BigDecimal("3"),
-                        1
-                ),
-                Arguments.of(
-                        "ASK LIMIT GTC는 단일 BID maker의 일부만 체결해도 taker가 종료되면 FILLED다.",
-                        orderBookWithLevel(304L, OrderSide.BID, "1100", "5"),
-                        createLimitPlaceMessage(14L, OrderSide.ASK, "1000", "2"),
-                        304L,
-                        OrderSide.BID,
-                        new BigDecimal("1100"),
-                        new BigDecimal("2"),
-                        new BigDecimal("2200"),
-                        new BigDecimal("3"),
-                        new BigDecimal("3"),
-                        1
-                )
-        );
-    }
-
-
-
-    private static CommandMessage.Place createLimitPlaceMessage(
-            Long commandLogId,
-            OrderSide orderSide,
-            String price,
-            String quantity
-    ) {
-        return new CommandMessage.Place(
-                commandLogId,
-                10L,
-                100L,
-                "KRW-BTC",
-                "cid-" + commandLogId,
-                orderSide,
+    private CommandMessage.Place limitBid(String price, String quantity) {
+        return createPlaceMessage(
+                OrderSide.BID,
                 OrderType.LIMIT,
                 TimeInForce.GTC,
-                new BigDecimal(price),
-                new BigDecimal(quantity),
-                null
+                price,
+                quantity,
+                null,
+                baseAssetScale
         );
     }
 
-    private static InMemoryOrderBook orderBookWithLevel(
-            Long orderId,
-            OrderSide orderSide,
-            String price,
-            String quantity
-    ) {
-        InMemoryOrderBook orderBook = new InMemoryOrderBook();
-        BookOrderEntry entry = BookOrderEntry.create(
-                orderId,
-                orderSide,
-                new BigDecimal(price),
-                new BigDecimal(quantity)
+    private CommandMessage.Place limitAsk(String price, String quantity) {
+        return createPlaceMessage(
+                OrderSide.ASK,
+                OrderType.LIMIT,
+                TimeInForce.GTC,
+                price,
+                quantity,
+                null,
+                baseAssetScale
         );
-        orderBook.add(entry);
+    }
+
+    private CommandMessage.Place marketBid(String quoteAmount) {
+        return marketBid(quoteAmount, baseAssetScale);
+    }
+
+    private CommandMessage.Place marketBid(String quoteAmount, int scale) {
+        return createPlaceMessage(
+                OrderSide.BID,
+                OrderType.MARKET,
+                TimeInForce.IOC,
+                null,
+                null,
+                quoteAmount,
+                scale
+        );
+    }
+
+    private CommandMessage.Place marketAsk(String quantity) {
+        return createPlaceMessage(
+                OrderSide.ASK,
+                OrderType.MARKET,
+                TimeInForce.IOC,
+                null,
+                quantity,
+                null,
+                baseAssetScale
+        );
+    }
+
+    private CommandMessage.Place createPlaceMessage(
+            OrderSide orderSide,
+            OrderType orderType,
+            TimeInForce timeInForce,
+            String price,
+            String quantity,
+            String quoteAmount,
+            int scale
+    ) {
+        long commandLogId = nextCommandLogId++;
+
+        return new CommandMessage.Place(
+                commandLogId,
+                userId,
+                marketId,
+                marketCode,
+                "cid-" + commandLogId,
+                orderKey(commandLogId),
+                orderSide,
+                orderType,
+                timeInForce,
+                decimalOrNull(price),
+                decimalOrNull(quantity),
+                decimalOrNull(quoteAmount),
+                scale
+        );
+    }
+
+    private InMemoryOrderBook orderBook(BookOrderEntry... entries) {
+        InMemoryOrderBook orderBook = new InMemoryOrderBook();
+        for (BookOrderEntry entry : entries) {
+            orderBook.add(entry);
+        }
         return orderBook;
     }
 
-    private static PriceLevel.Snapshot getRequiredLevelSnapshot(
+    private static BookOrderEntry maker(Long orderId, OrderSide side, String price, String quantity) {
+        return BookOrderEntry.create(orderKey(orderId), side, decimal(price), decimal(quantity));
+    }
+
+    private static String orderKey(Long orderId) {
+        return "order-key-" + orderId;
+    }
+
+    private static BigDecimal decimal(String value) {
+        return new BigDecimal(value);
+    }
+
+    private static BigDecimal decimalOrNull(String value) {
+        return value == null ? null : decimal(value);
+    }
+
+    private static PriceLevel.Snapshot requiredLevelSnapshot(
             InMemoryOrderBook orderBook,
             OrderSide side,
             BigDecimal price
