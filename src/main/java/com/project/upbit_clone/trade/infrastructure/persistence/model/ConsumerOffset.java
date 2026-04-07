@@ -28,6 +28,8 @@ public class ConsumerOffset {
     private LocalDateTime updatedAt;
 
     public static ConsumerOffset create(ConsumerOffsetId id, Long lastOffset) {
+        // TODO : 저장 검증 필요 즉 worker의 result에만 의존하면안됨.
+
         validateCreateInput(id, lastOffset);
         return new ConsumerOffset(id, lastOffset);
     }

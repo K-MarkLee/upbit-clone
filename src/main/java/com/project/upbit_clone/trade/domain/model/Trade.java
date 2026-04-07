@@ -73,6 +73,7 @@ public class Trade {
     private LocalDateTime executedAt;
 
     public static Trade create(CreateCommand command) {
+        // TODO : 저장 검증 필요 즉 worker의 result에만 의존하면안됨.
         validateCreateCommand(command);
 
         // buyOrder와 sellOrder가 각 BID와 ASK가 맞는지 검증.

@@ -24,10 +24,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class MarketWorkerTest {
 
     private MarketWorker marketWorker;
+    private WorkerWriteService workerWriteService;
 
     @BeforeEach
     void setUp() {
-        marketWorker = new MarketWorker(100L, new MatchingEngineCore());
+        workerWriteService = new WorkerWriteService();
+        marketWorker = new MarketWorker(100L, new MatchingEngineCore(), workerWriteService);
     }
 
     @AfterEach
@@ -364,7 +366,7 @@ class MarketWorkerTest {
     void worker_invokes_matching_engine_when_place_message_is_consumed() throws InterruptedException {
         // given
         CapturingMatchingEngineCore matchingEngineCore = new CapturingMatchingEngineCore();
-        marketWorker = new MarketWorker(100L, matchingEngineCore);
+        marketWorker = new MarketWorker(100L, matchingEngineCore, workerWriteService);
         CommandMessage.Place message = validLimitPlaceMessage();
 
         // when

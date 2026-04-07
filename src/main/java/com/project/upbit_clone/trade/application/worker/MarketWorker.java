@@ -20,14 +20,16 @@ public class MarketWorker {
     private final Long marketId;
     private final MatchingEngineCore matchingEngineCore;
     private final InMemoryOrderBook orderBook;
+    private final WorkerWriteService workerWriteService;
     private final BlockingQueue<CommandMessage> mailbox = new LinkedBlockingQueue<>();
     private volatile String marketCode;
     private volatile boolean running;
     private Thread workerThread;
 
-    public MarketWorker(Long marketId, MatchingEngineCore matchingEngineCore) {
+    public MarketWorker(Long marketId, MatchingEngineCore matchingEngineCore, WorkerWriteService workerWriteService) {
         this.marketId = Objects.requireNonNull(marketId, "marketId는 null값일 수 없습니다.");
         this.matchingEngineCore = Objects.requireNonNull(matchingEngineCore, "matchingEngineCore는 null값일 수 없습니다.");
+        this.workerWriteService = Objects.requireNonNull(workerWriteService, "workerWriteService는 null값일 수 없습니다.");
         this.orderBook = new InMemoryOrderBook();
     }
 
@@ -112,6 +114,7 @@ public class MarketWorker {
                 result.remainingQuantity(),
                 result.fills().size()
         );
+        workerWriteService.writePlace(message, result);
     }
 
     // 취소처리
