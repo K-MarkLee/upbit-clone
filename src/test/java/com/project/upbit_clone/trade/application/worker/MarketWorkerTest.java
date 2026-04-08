@@ -11,6 +11,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -19,6 +20,8 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 
 @DisplayName("MarketWorker 단위 테스트")
 class MarketWorkerTest {
@@ -28,7 +31,7 @@ class MarketWorkerTest {
 
     @BeforeEach
     void setUp() {
-        workerWriteService = new WorkerWriteService();
+        workerWriteService = Mockito.mock(WorkerWriteService.class);
         marketWorker = new MarketWorker(100L, new MatchingEngineCore(), workerWriteService);
     }
 
@@ -401,6 +404,8 @@ class MarketWorkerTest {
 
         // then
         awaitOrderAbsence(placeMessage.orderKey());
+        Mockito.verify(workerWriteService, Mockito.timeout(1_000))
+                .writeCancel(eq(cancelMessage), any(InMemoryOrderBook.LevelDelta.class));
     }
 
     private CommandMessage.Place validLimitPlaceMessage() {

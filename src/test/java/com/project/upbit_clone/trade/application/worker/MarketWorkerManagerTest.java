@@ -9,6 +9,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.math.BigDecimal;
 import java.util.concurrent.CountDownLatch;
@@ -31,7 +32,7 @@ class MarketWorkerManagerTest {
 
     @BeforeEach
     void setUp() {
-        workerWriteService = new WorkerWriteService();
+        workerWriteService = Mockito.mock(WorkerWriteService.class);
         marketWorkerManager = new MarketWorkerManager(new MatchingEngineCore(), workerWriteService);
         btcPlaceMessage = new CommandMessage.Place(
                 1L,
