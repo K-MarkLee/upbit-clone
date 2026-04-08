@@ -48,6 +48,7 @@ public class Wallet extends BaseEntity {
     private Long version;
 
     public static Wallet create(User user, Asset asset, BigDecimal availableBalance, BigDecimal lockedBalance) {
+        // TODO : 저장 검증 필요 즉 worker의 result에만 의존하면안됨.
         validateCreateInput(user, asset);
 
         return new Wallet(user, asset, availableBalance, lockedBalance);

@@ -7,9 +7,13 @@ import com.project.upbit_clone.global.exception.ErrorCode;
 import com.project.upbit_clone.trade.application.dispatch.CommandDispatcher;
 import com.project.upbit_clone.trade.application.dispatch.CommandMessage;
 import com.project.upbit_clone.trade.domain.model.Market;
+import com.project.upbit_clone.trade.domain.model.Order;
 import com.project.upbit_clone.trade.domain.repository.MarketRepository;
+import com.project.upbit_clone.trade.domain.repository.OrderRepository;
+import com.project.upbit_clone.trade.domain.vo.OrderSide;
+import com.project.upbit_clone.trade.domain.vo.OrderType;
+import com.project.upbit_clone.trade.domain.vo.TimeInForce;
 import com.project.upbit_clone.trade.infrastructure.persistence.model.CommandLog;
-import com.project.upbit_clone.trade.infrastructure.persistence.repository.CommandLogRepository;
 import com.project.upbit_clone.trade.infrastructure.persistence.vo.CommandType;
 import com.project.upbit_clone.user.domain.model.User;
 import com.project.upbit_clone.user.domain.repository.UserRepository;
@@ -42,7 +46,7 @@ import static org.mockito.Mockito.when;
 class CancelOrderTest {
 
     @Mock
-    private CommandLogRepository commandLogRepository;
+    private OrderRepository orderRepository;
 
     @Mock
     private UserRepository userRepository;
@@ -64,7 +68,7 @@ class CancelOrderTest {
     @BeforeEach
     void setUp() {
         cancelOrder = new CancelOrder(
-                commandLogRepository,
+                orderRepository,
                 userRepository,
                 marketRepository,
                 JsonMapper.builder().build(),
@@ -82,22 +86,14 @@ class CancelOrderTest {
         CancelOrder.Command command = validCommand();
         User activeUser = User.create("u@test.com", "user", EnumStatus.ACTIVE, "pw");
         Market activeMarket = createMarket(EnumStatus.ACTIVE);
-        CommandLog placeLog = CommandLog.create(new CommandLog.CreateCommand(
-                "place-1",
-                CommandType.PLACE_ORDER,
-                1L,
-                1L,
-                "cid-1",
-                "{\"order\":\"place\"}",
-                "hash-place"
-        ));
+        Order targetOrder = createOrder(activeMarket, activeUser, "cid-1", "order-key-1");
 
         when(idempotencyHitService.find(1L, "cid-1", CommandType.CANCEL_ORDER))
                 .thenReturn(Optional.empty());
         when(userRepository.findById(1L)).thenReturn(Optional.of(activeUser));
         when(marketRepository.findWithAssetsById(1L)).thenReturn(Optional.of(activeMarket));
-        when(commandLogRepository.findByUserIdAndClientOrderIdAndCommandType(1L, "cid-1", CommandType.PLACE_ORDER))
-                .thenReturn(Optional.of(placeLog));
+        when(orderRepository.findByUserIdAndClientOrderIdAndMarketId(1L, "cid-1", 1L))
+                .thenReturn(Optional.of(targetOrder));
         when(commandLogAppendService.append(any(CommandLog.class)))
                 .thenAnswer(invocation -> {
                     CommandLog log = invocation.getArgument(0);
@@ -130,22 +126,14 @@ class CancelOrderTest {
         CancelOrder.Command command = validCommand();
         User activeUser = User.create("u@test.com", "user", EnumStatus.ACTIVE, "pw");
         Market activeMarket = createMarket(EnumStatus.ACTIVE);
-        CommandLog placeLog = CommandLog.create(new CommandLog.CreateCommand(
-                "place-1",
-                CommandType.PLACE_ORDER,
-                1L,
-                1L,
-                "cid-1",
-                "{\"order\":\"place\"}",
-                "hash-place"
-        ));
+        Order targetOrder = createOrder(activeMarket, activeUser, "cid-1", "order-key-1");
 
         when(idempotencyHitService.find(1L, "cid-1", CommandType.CANCEL_ORDER))
                 .thenReturn(Optional.empty());
         when(userRepository.findById(1L)).thenReturn(Optional.of(activeUser));
         when(marketRepository.findWithAssetsById(1L)).thenReturn(Optional.of(activeMarket));
-        when(commandLogRepository.findByUserIdAndClientOrderIdAndCommandType(1L, "cid-1", CommandType.PLACE_ORDER))
-                .thenReturn(Optional.of(placeLog));
+        when(orderRepository.findByUserIdAndClientOrderIdAndMarketId(1L, "cid-1", 1L))
+                .thenReturn(Optional.of(targetOrder));
         when(commandLogAppendService.append(any(CommandLog.class)))
                 .thenAnswer(invocation -> {
                     CommandLog log = invocation.getArgument(0);
@@ -164,7 +152,7 @@ class CancelOrderTest {
         CommandMessage.Cancel dispatched = (CommandMessage.Cancel) messageCaptor.getValue();
         assertThat(dispatched.commandLogId()).isEqualTo(200L);
         assertThat(dispatched.clientOrderId()).isEqualTo(command.clientOrderId());
-        assertThat(dispatched.targetOrderKey()).isEqualTo(placeLog.getCommandId());
+        assertThat(dispatched.targetOrderKey()).isEqualTo(targetOrder.getOrderKey());
     }
 
     @ParameterizedTest(name = "[{index}] {0}")
@@ -199,7 +187,7 @@ class CancelOrderTest {
                 .thenReturn(Optional.empty());
         when(userRepository.findById(1L)).thenReturn(Optional.of(activeUser));
         when(marketRepository.findWithAssetsById(1L)).thenReturn(Optional.of(activeMarket));
-        when(commandLogRepository.findByUserIdAndClientOrderIdAndCommandType(1L, "cid-1", CommandType.PLACE_ORDER))
+        when(orderRepository.findByUserIdAndClientOrderIdAndMarketId(1L, "cid-1", 1L))
                 .thenReturn(Optional.empty());
 
         // when & then
@@ -210,33 +198,48 @@ class CancelOrderTest {
     }
 
     @Test
-    @DisplayName("Negative : 취소 요청 marketId가 원 주문 marketId와 다르면 BusinessException을 반환한다.")
-    void handle_with_place_order_market_mismatch() {
+    @DisplayName("Negative : 취소 요청 marketId와 일치하는 주문이 없으면 BusinessException을 반환한다.")
+    void handle_with_order_market_mismatch() {
         // given
         CancelOrder.Command command = validCommand();
         User activeUser = User.create("u@test.com", "user", EnumStatus.ACTIVE, "pw");
         Market activeMarket = createMarket(EnumStatus.ACTIVE);
-        CommandLog placeLog = CommandLog.create(new CommandLog.CreateCommand(
-                "place-1",
-                CommandType.PLACE_ORDER,
-                999L,
-                1L,
-                "cid-1",
-                "{\"order\":\"place\"}",
-                "hash-place"
-        ));
 
         when(idempotencyHitService.find(1L, "cid-1", CommandType.CANCEL_ORDER))
                 .thenReturn(Optional.empty());
         when(userRepository.findById(1L)).thenReturn(Optional.of(activeUser));
         when(marketRepository.findWithAssetsById(1L)).thenReturn(Optional.of(activeMarket));
-        when(commandLogRepository.findByUserIdAndClientOrderIdAndCommandType(1L, "cid-1", CommandType.PLACE_ORDER))
-                .thenReturn(Optional.of(placeLog));
+        when(orderRepository.findByUserIdAndClientOrderIdAndMarketId(1L, "cid-1", 1L))
+                .thenReturn(Optional.empty());
 
         // when & then
         assertThatThrownBy(() -> cancelOrder.handle(command))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ORDER_NOT_FOUND);
+        verify(commandLogAppendService, never()).append(any(CommandLog.class));
+    }
+
+    @Test
+    @DisplayName("Negative : 이미 FILLED 상태인 주문은 취소할 수 없다.")
+    void handle_with_filled_order() {
+        // given
+        CancelOrder.Command command = validCommand();
+        User activeUser = User.create("u@test.com", "user", EnumStatus.ACTIVE, "pw");
+        Market activeMarket = createMarket(EnumStatus.ACTIVE);
+        Order targetOrder = createOrder(activeMarket, activeUser, "cid-1", "order-key-1");
+        targetOrder.applyExecutedQuantity(BigDecimal.ONE, new BigDecimal("10000"));
+
+        when(idempotencyHitService.find(1L, "cid-1", CommandType.CANCEL_ORDER))
+                .thenReturn(Optional.empty());
+        when(userRepository.findById(1L)).thenReturn(Optional.of(activeUser));
+        when(marketRepository.findWithAssetsById(1L)).thenReturn(Optional.of(activeMarket));
+        when(orderRepository.findByUserIdAndClientOrderIdAndMarketId(1L, "cid-1", 1L))
+                .thenReturn(Optional.of(targetOrder));
+
+        // when & then
+        assertThatThrownBy(() -> cancelOrder.handle(command))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ORDER_NOT_OPEN);
         verify(commandLogAppendService, never()).append(any(CommandLog.class));
     }
 
@@ -255,6 +258,21 @@ class CancelOrderTest {
                 status,
                 new BigDecimal("5000"),
                 new BigDecimal("1000")
+        ));
+    }
+
+    private Order createOrder(Market market, User user, String clientOrderId, String orderKey) {
+        return Order.create(new Order.CreateCommand(
+                market,
+                user,
+                clientOrderId,
+                orderKey,
+                OrderSide.BID,
+                OrderType.LIMIT,
+                TimeInForce.GTC,
+                new BigDecimal("10000"),
+                BigDecimal.ONE,
+                null
         ));
     }
 

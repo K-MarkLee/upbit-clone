@@ -24,13 +24,15 @@ class MarketWorkerManagerTest {
     private static final Long ETH_MARKET_ID = 200L;
 
     private MarketWorkerManager marketWorkerManager;
+    private WorkerWriteService workerWriteService;
     private CommandMessage.Place btcPlaceMessage;
     private CommandMessage.Cancel btcCancelMessage;
     private CommandMessage.Place ethPlaceMessage;
 
     @BeforeEach
     void setUp() {
-        marketWorkerManager = new MarketWorkerManager(new MatchingEngineCore());
+        workerWriteService = new WorkerWriteService();
+        marketWorkerManager = new MarketWorkerManager(new MatchingEngineCore(), workerWriteService);
         btcPlaceMessage = new CommandMessage.Place(
                 1L,
                 10L,
@@ -154,7 +156,7 @@ class MarketWorkerManagerTest {
     void submit_and_shutdown_all_are_serialized() throws InterruptedException {
         // given
         BlockingCreateMarketWorkerManager blockingManager =
-                new BlockingCreateMarketWorkerManager(new MatchingEngineCore());
+                new BlockingCreateMarketWorkerManager(new MatchingEngineCore(), workerWriteService);
         marketWorkerManager = blockingManager;
         CountDownLatch submitCompleted = new CountDownLatch(1);
         CountDownLatch shutdownCompleted = new CountDownLatch(1);
@@ -195,19 +197,24 @@ class MarketWorkerManagerTest {
 
     private static final class BlockingCreateMarketWorkerManager extends MarketWorkerManager {
         private final MatchingEngineCore matchingEngineCore;
+        private final WorkerWriteService workerWriteService;
         private final CountDownLatch creationStarted = new CountDownLatch(1);
         private final CountDownLatch allowCreation = new CountDownLatch(1);
 
-        private BlockingCreateMarketWorkerManager(MatchingEngineCore matchingEngineCore) {
-            super(matchingEngineCore);
+        private BlockingCreateMarketWorkerManager(
+                MatchingEngineCore matchingEngineCore,
+                WorkerWriteService workerWriteService
+        ) {
+            super(matchingEngineCore, workerWriteService);
             this.matchingEngineCore = matchingEngineCore;
+            this.workerWriteService = workerWriteService;
         }
 
         @Override
         MarketWorker createWorker(Long marketId) {
             creationStarted.countDown();
             awaitAllowCreation();
-            return new MarketWorker(marketId, matchingEngineCore);
+            return new MarketWorker(marketId, matchingEngineCore, workerWriteService);
         }
 
         private boolean awaitCreationStarted() throws InterruptedException {

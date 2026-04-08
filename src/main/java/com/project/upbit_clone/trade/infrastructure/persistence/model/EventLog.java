@@ -66,6 +66,8 @@ public class EventLog {
     private LocalDateTime createdAt;
 
     public static EventLog create(CreateCommand command) {
+        // TODO : 저장 검증 필요 즉 worker의 result에만 의존하면안됨.
+
         validateCreateCommand(command);
         return new EventLog(command);
     }

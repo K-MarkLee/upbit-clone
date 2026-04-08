@@ -68,11 +68,9 @@ abstract class AbstractOrderIngress<C extends OrderCommand> {
         String commandId = UUID.randomUUID().toString();
         validateBusiness(normalized, market, user, commandId);
 
-        CommandLog commandLog = createCommandLog(normalized, requestHash, commandId);
         CommandLog saved;
         try {
-            saved = commandLogAppendService.append(commandLog);
-
+            saved = persistAccepted(normalized, requestHash, commandId, user, market);
         } catch (DataIntegrityViolationException exception) {
             Optional<CommandLog> recovered = idempotencyHitService.findInNewTransaction(
                     normalized.userId(),
@@ -100,6 +98,11 @@ abstract class AbstractOrderIngress<C extends OrderCommand> {
             );
         }
         return CommandAck.accepted(saved, false);
+    }
+
+    protected CommandLog persistAccepted(C command, String requestHash, String commandId, User user, Market market) {
+        CommandLog commandLog = createCommandLog(command, requestHash, commandId);
+        return commandLogAppendService.append(commandLog);
     }
 
     protected abstract C normalize(C command);
@@ -140,7 +143,7 @@ abstract class AbstractOrderIngress<C extends OrderCommand> {
     }
 
     // 커맨드 로그 생성 (주문 생성 : CREATE, CANCEL)
-    private CommandLog createCommandLog(OrderCommand command, String requestHash, String commandId) {
+    protected CommandLog createCommandLog(OrderCommand command, String requestHash, String commandId) {
         return CommandLog.create(new CommandLog.CreateCommand(
                 commandId,
                 command.commandType(),

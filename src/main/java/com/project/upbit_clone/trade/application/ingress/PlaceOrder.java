@@ -5,14 +5,15 @@ import com.project.upbit_clone.global.exception.ErrorCode;
 import com.project.upbit_clone.trade.application.dispatch.CommandDispatcher;
 import com.project.upbit_clone.trade.application.dispatch.CommandMessage;
 import com.project.upbit_clone.trade.domain.model.Market;
-import com.project.upbit_clone.trade.domain.model.Order;
 import com.project.upbit_clone.trade.domain.repository.MarketRepository;
+import com.project.upbit_clone.trade.infrastructure.persistence.model.CommandLog;
 import com.project.upbit_clone.trade.domain.vo.OrderSide;
 import com.project.upbit_clone.trade.domain.vo.OrderType;
 import com.project.upbit_clone.trade.domain.vo.TimeInForce;
 import com.project.upbit_clone.trade.infrastructure.persistence.vo.CommandType;
 import com.project.upbit_clone.user.domain.model.User;
 import com.project.upbit_clone.user.domain.repository.UserRepository;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -21,6 +22,10 @@ import java.math.BigDecimal;
 @Service
 public class PlaceOrder extends AbstractOrderIngress<PlaceOrder.Command> {
 
+    private static final int MAX_RESERVATION_ATTEMPTS = 2;
+
+    private final OrderWriteService orderWriteService;
+
     public PlaceOrder(
             UserRepository userRepository,
             MarketRepository marketRepository,
@@ -28,7 +33,8 @@ public class PlaceOrder extends AbstractOrderIngress<PlaceOrder.Command> {
             IdempotencyHitService idempotencyHitService,
             CommandLogAppendService commandLogAppendService,
             OrderCommandHashService orderCommandHashService,
-            CommandDispatcher commandDispatcher
+            CommandDispatcher commandDispatcher,
+            OrderWriteService orderWriteService
     ) {
         super(
                 userRepository,
@@ -39,6 +45,7 @@ public class PlaceOrder extends AbstractOrderIngress<PlaceOrder.Command> {
                 orderCommandHashService,
                 commandDispatcher
         );
+        this.orderWriteService = orderWriteService;
     }
 
     public CommandAck handle(Command command) {
@@ -80,20 +87,33 @@ public class PlaceOrder extends AbstractOrderIngress<PlaceOrder.Command> {
     @Override
     protected void validateBusiness(Command command, Market market, User user, String commandId) {
         validateOrderShape(command);
+        validateSupportedTimeInForce(command.timeInForce());
+    }
 
-        // TODO: 거래시 사용자의 지갑이 있는지 검증을 해야함.
-        Order.create(new Order.CreateCommand(
-                market,
-                user,
-                command.clientOrderId(),
-                commandId,
-                command.orderSide(),
-                command.orderType(),
-                command.timeInForce(),
-                command.price(),
-                command.quantity(),
-                command.quoteAmount()
-        ));
+    @Override
+    protected CommandLog persistAccepted(Command command, String requestHash, String commandId, User user, Market market) {
+        for (int attempt = 1; true; attempt++) {
+            try {
+                CommandLog commandLog = createCommandLog(command, requestHash, commandId);
+                return orderWriteService.writeAcceptedPlace(new OrderWriteService.AcceptedPlaceCommand(
+                        commandLog,
+                        user,
+                        market,
+                        command.clientOrderId(),
+                        commandId,
+                        command.orderSide(),
+                        command.orderType(),
+                        command.timeInForce(),
+                        command.price(),
+                        command.quantity(),
+                        command.quoteAmount()
+                )).commandLog();
+            } catch (OptimisticLockingFailureException exception) {
+                if (attempt >= MAX_RESERVATION_ATTEMPTS) {
+                    throw exception;
+                }
+            }
+        }
     }
 
     @Override
@@ -157,6 +177,12 @@ public class PlaceOrder extends AbstractOrderIngress<PlaceOrder.Command> {
     private void validateMarketAskShape(Command command) {
         if (command.price() != null || command.quantity() == null || command.quoteAmount() != null) {
             throw new BusinessException(ErrorCode.INVALID_MARKET_ASK_INPUT);
+        }
+    }
+
+    private void validateSupportedTimeInForce(TimeInForce timeInForce) {
+        if (timeInForce == TimeInForce.FOK) {
+            throw new BusinessException(ErrorCode.UNSUPPORTED_TIME_IN_FORCE);
         }
     }
 

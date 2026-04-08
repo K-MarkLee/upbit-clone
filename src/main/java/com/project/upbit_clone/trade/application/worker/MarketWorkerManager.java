@@ -12,10 +12,12 @@ public class MarketWorkerManager {
 
     private final ConcurrentHashMap<Long, MarketWorker> workers = new ConcurrentHashMap<>();
     private final MatchingEngineCore matchingEngineCore;
+    private final WorkerWriteService workerWriteService;
     private volatile boolean accepting = true;
 
-    public MarketWorkerManager(MatchingEngineCore matchingEngineCore) {
+    public MarketWorkerManager(MatchingEngineCore matchingEngineCore, WorkerWriteService workerWriteService) {
         this.matchingEngineCore = matchingEngineCore;
+        this.workerWriteService = workerWriteService;
     }
 
     public synchronized void submit(CommandMessage message) {
@@ -43,7 +45,7 @@ public class MarketWorkerManager {
     }
 
     MarketWorker createWorker(Long marketId) {
-        return new MarketWorker(marketId, matchingEngineCore);
+        return new MarketWorker(marketId, matchingEngineCore, workerWriteService);
     }
 
     MarketWorker workerFor(Long marketId) {

@@ -5,9 +5,10 @@ import com.project.upbit_clone.trade.application.dispatch.CommandMessage;
 import com.project.upbit_clone.global.exception.BusinessException;
 import com.project.upbit_clone.global.exception.ErrorCode;
 import com.project.upbit_clone.trade.domain.model.Market;
+import com.project.upbit_clone.trade.domain.model.Order;
 import com.project.upbit_clone.trade.domain.repository.MarketRepository;
-import com.project.upbit_clone.trade.infrastructure.persistence.model.CommandLog;
-import com.project.upbit_clone.trade.infrastructure.persistence.repository.CommandLogRepository;
+import com.project.upbit_clone.trade.domain.repository.OrderRepository;
+import com.project.upbit_clone.trade.domain.vo.OrderStatus;
 import com.project.upbit_clone.trade.infrastructure.persistence.vo.CommandType;
 import com.project.upbit_clone.user.domain.model.User;
 import com.project.upbit_clone.user.domain.repository.UserRepository;
@@ -17,10 +18,10 @@ import tools.jackson.databind.json.JsonMapper;
 @Service
 public class CancelOrder extends AbstractOrderIngress<CancelOrder.Command> {
 
-    private final CommandLogRepository commandLogRepository;
+    private final OrderRepository orderRepository;
 
     public CancelOrder(
-            CommandLogRepository commandLogRepository,
+            OrderRepository orderRepository,
             UserRepository userRepository,
             MarketRepository marketRepository,
             JsonMapper jsonMapper,
@@ -38,7 +39,7 @@ public class CancelOrder extends AbstractOrderIngress<CancelOrder.Command> {
                 orderCommandHashService,
                 commandDispatcher
         );
-        this.commandLogRepository = commandLogRepository;
+        this.orderRepository = orderRepository;
     }
 
     public CommandAck handle(Command command) {
@@ -64,15 +65,15 @@ public class CancelOrder extends AbstractOrderIngress<CancelOrder.Command> {
 
     @Override
     protected void validateBusiness(Command command, Market market, User user, String commandId) {
-        CommandLog placeCommand = findRequiredPlaceCommand(command);
-        if (!command.marketId().equals(placeCommand.getMarketId())) {
-            throw new BusinessException(ErrorCode.ORDER_NOT_FOUND);
+        Order targetOrder = findRequiredOrder(command);
+        if (targetOrder.getStatus() != OrderStatus.PENDING && targetOrder.getStatus() != OrderStatus.OPEN) {
+            throw new BusinessException(ErrorCode.ORDER_NOT_OPEN);
         }
     }
 
     @Override
     protected CommandMessage toCommandMessage(Long commandLogId, String commandId, Command command, Market market) {
-        CommandLog targetPlaceCommand = findRequiredPlaceCommand(command);
+        Order targetOrder = findRequiredOrder(command);
 
         return new CommandMessage.Cancel(
                 commandLogId,
@@ -80,17 +81,17 @@ public class CancelOrder extends AbstractOrderIngress<CancelOrder.Command> {
                 command.marketId(),
                 market.getMarketCode(),
                 command.clientOrderId(),
-                targetPlaceCommand.getCommandId(),
+                targetOrder.getOrderKey(),
                 command.cancelReason()
         );
     }
 
-    private CommandLog findRequiredPlaceCommand(Command command) {
-        return commandLogRepository
-                .findByUserIdAndClientOrderIdAndCommandType(
+    private Order findRequiredOrder(Command command) {
+        return orderRepository
+                .findByUserIdAndClientOrderIdAndMarketId(
                         command.userId(),
                         command.clientOrderId(),
-                        CommandType.PLACE_ORDER
+                        command.marketId()
                 )
                 .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
     }

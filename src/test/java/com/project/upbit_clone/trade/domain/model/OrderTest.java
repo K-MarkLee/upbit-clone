@@ -67,7 +67,7 @@ class OrderTest {
         assertThat(order.getQuoteAmount()).isNull();
         assertThat(order.getExecutedQuantity()).isEqualTo(BigDecimal.ZERO);
         assertThat(order.getExecutedQuoteAmount()).isEqualTo(BigDecimal.ZERO);
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.OPEN);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
         assertThat(order.getCancelReason()).isNull();
     }
 
@@ -97,7 +97,7 @@ class OrderTest {
         assertThat(order.getQuoteAmount()).isNull();
         assertThat(order.getExecutedQuantity()).isEqualTo(BigDecimal.ZERO);
         assertThat(order.getExecutedQuoteAmount()).isEqualTo(BigDecimal.ZERO);
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.OPEN);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
         assertThat(order.getCancelReason()).isNull();
     }
 
@@ -126,7 +126,7 @@ class OrderTest {
         assertThat(order.getQuoteAmount()).isEqualTo(quoteAmount);
         assertThat(order.getExecutedQuantity()).isEqualTo(BigDecimal.ZERO);
         assertThat(order.getExecutedQuoteAmount()).isEqualTo(BigDecimal.ZERO);
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.OPEN);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
         assertThat(order.getCancelReason()).isNull();
     }
 
@@ -155,7 +155,7 @@ class OrderTest {
         assertThat(order.getQuoteAmount()).isNull();
         assertThat(order.getExecutedQuantity()).isEqualTo(BigDecimal.ZERO);
         assertThat(order.getExecutedQuoteAmount()).isEqualTo(BigDecimal.ZERO);
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.OPEN);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
         assertThat(order.getCancelReason()).isNull();
     }
 
@@ -603,7 +603,7 @@ class OrderTest {
 
         // then
         assertThat(order).isNotNull();
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.OPEN);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
     }
 
     @Test
@@ -620,12 +620,12 @@ class OrderTest {
 
         // then
         assertThat(order).isNotNull();
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.OPEN);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
     }
 
     @Test
-    @DisplayName("Happy : 부분 체결 시 OPEN 상태를 유지하고 executed 값이 누적된다.")
-    void apply_executed_quantity_partial_fill_keeps_open() {
+    @DisplayName("Happy : PENDING 주문이 부분 체결되면 OPEN 상태로 승격되고 executed 값이 누적된다.")
+    void apply_executed_quantity_partial_fill_promotes_pending_to_open() {
         // given
         Order order = Order.create(createCommand(
                 market, user, clientOrderId, OrderSide.ASK, OrderType.LIMIT,
@@ -638,6 +638,23 @@ class OrderTest {
         // then
         assertThat(order.getExecutedQuantity()).isEqualByComparingTo("1");
         assertThat(order.getExecutedQuoteAmount()).isEqualByComparingTo("10000");
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.OPEN);
+        assertThat(order.getCancelReason()).isNull();
+    }
+
+    @Test
+    @DisplayName("Happy : 무체결 resting 주문은 markOpen으로 PENDING에서 OPEN으로 전이된다.")
+    void mark_open_promotes_pending_to_open() {
+        // given
+        Order order = Order.create(createCommand(
+                market, user, clientOrderId, OrderSide.ASK, OrderType.LIMIT,
+                null, price, BigDecimal.ONE, null
+        ));
+
+        // when
+        order.markOpen();
+
+        // then
         assertThat(order.getStatus()).isEqualTo(OrderStatus.OPEN);
         assertThat(order.getCancelReason()).isNull();
     }
@@ -680,8 +697,8 @@ class OrderTest {
     }
 
     @Test
-    @DisplayName("Negative : OPEN 상태가 아닌 주문에 체결을 반영하면 BusinessException을 반환한다.")
-    void apply_executed_quantity_on_not_open_order() {
+    @DisplayName("Negative : PENDING/OPEN 상태가 아닌 주문에 체결을 반영하면 BusinessException을 반환한다.")
+    void apply_executed_quantity_on_not_processable_order() {
         // given
         Order order = Order.create(createCommand(
                 market, user, clientOrderId, OrderSide.BID, OrderType.LIMIT,
@@ -730,8 +747,8 @@ class OrderTest {
 
     @ParameterizedTest(name = "[{index}] {0}")
     @MethodSource("cancelOpenOrderInputs")
-    @DisplayName("Happy : OPEN 주문 cancel 시 입력 사유에 따라 취소 사유가 저장된다.")
-    void cancel_open_order_with_reason(
+    @DisplayName("Happy : PENDING 또는 OPEN 주문 cancel 시 입력 사유에 따라 취소 사유가 저장된다.")
+    void cancel_processable_order_with_reason(
             String caseName,
             String reason,
             String expectedCancelReason
@@ -792,6 +809,22 @@ class OrderTest {
         // then
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
         assertThat(order.getCancelReason()).isEqualTo("FIRST_REASON");
+    }
+
+    @Test
+    @DisplayName("Negative : FILLED 상태 주문에 markOpen을 호출하면 BusinessException을 반환한다.")
+    void mark_open_on_filled_order_throws() {
+        // given
+        Order order = Order.create(createCommand(
+                market, user, clientOrderId, OrderSide.ASK, OrderType.LIMIT,
+                null, price, BigDecimal.ONE, null
+        ));
+        order.applyExecutedQuantity(BigDecimal.ONE, new BigDecimal("10000"));
+
+        // when & then
+        assertThatThrownBy(order::markOpen)
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ORDER_NOT_OPEN);
     }
 
 

@@ -18,10 +18,10 @@ import com.project.upbit_clone.user.domain.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -59,6 +59,9 @@ class PlaceOrderTest {
     @Mock
     private CommandDispatcher commandDispatcher;
 
+    @Mock
+    private OrderWriteService orderWriteService;
+
     private PlaceOrder placeOrder;
 
     @BeforeEach
@@ -70,7 +73,8 @@ class PlaceOrderTest {
                 idempotencyHitService,
                 commandLogAppendService,
                 new OrderCommandHashService(),
-                commandDispatcher
+                commandDispatcher,
+                orderWriteService
         );
     }
 
@@ -86,11 +90,11 @@ class PlaceOrderTest {
                 .thenReturn(Optional.empty());
         when(userRepository.findById(1L)).thenReturn(Optional.of(activeUser));
         when(marketRepository.findWithAssetsById(1L)).thenReturn(Optional.of(activeMarket));
-        when(commandLogAppendService.append(any(CommandLog.class)))
+        when(orderWriteService.writeAcceptedPlace(any(OrderWriteService.AcceptedPlaceCommand.class)))
                 .thenAnswer(invocation -> {
-                    CommandLog log = invocation.getArgument(0);
-                    setCommandLogId(log, 100L);
-                    return log;
+                    OrderWriteService.AcceptedPlaceCommand accepted = invocation.getArgument(0);
+                    setCommandLogId(accepted.commandLog(), 100L);
+                    return new OrderWriteService.AcceptedPlaceWrite(accepted.commandLog(), null, null);
                 });
 
         // when
@@ -102,18 +106,25 @@ class PlaceOrderTest {
         assertThat(ack.commandType()).isEqualTo(CommandType.PLACE_ORDER);
         assertThat(ack.commandLogId()).isEqualTo(100L);
 
-        ArgumentCaptor<CommandLog> captor = ArgumentCaptor.forClass(CommandLog.class);
-        verify(commandLogAppendService).append(captor.capture());
-        CommandLog appended = captor.getValue();
-        assertThat(appended.getUserId()).isEqualTo(1L);
-        assertThat(appended.getMarketId()).isEqualTo(1L);
-        assertThat(appended.getClientOrderId()).isEqualTo("cid-1");
+        ArgumentCaptor<OrderWriteService.AcceptedPlaceCommand> captor =
+                ArgumentCaptor.forClass(OrderWriteService.AcceptedPlaceCommand.class);
+        verify(orderWriteService).writeAcceptedPlace(captor.capture());
+        OrderWriteService.AcceptedPlaceCommand accepted = captor.getValue();
+
+        assertThat(accepted.commandLog().getUserId()).isEqualTo(1L);
+        assertThat(accepted.commandLog().getMarketId()).isEqualTo(1L);
+        assertThat(accepted.commandLog().getClientOrderId()).isEqualTo("cid-1");
+        assertThat(accepted.user()).isEqualTo(activeUser);
+        assertThat(accepted.market()).isEqualTo(activeMarket);
+        assertThat(accepted.clientOrderId()).isEqualTo("cid-1");
+        assertThat(accepted.orderKey()).isEqualTo(accepted.commandLog().getCommandId());
         verify(commandDispatcher).dispatch(any(CommandMessage.class));
+        verify(commandLogAppendService, never()).append(any(CommandLog.class));
     }
 
     @Test
-    @DisplayName("Happy : place dispatch message는 append된 commandId를 orderKey로 전달한다.")
-    void handle_dispatches_place_message_with_order_key_from_appended_command_id() {
+    @DisplayName("Happy : place dispatch message는 persisted commandId를 orderKey로 전달한다.")
+    void handle_dispatches_place_message_with_order_key_from_persisted_command_id() {
         // given
         PlaceOrder.Command command = validCommand();
         User activeUser = User.create("u@test.com", "user", EnumStatus.ACTIVE, "pw");
@@ -123,28 +134,29 @@ class PlaceOrderTest {
                 .thenReturn(Optional.empty());
         when(userRepository.findById(1L)).thenReturn(Optional.of(activeUser));
         when(marketRepository.findWithAssetsById(1L)).thenReturn(Optional.of(activeMarket));
-        when(commandLogAppendService.append(any(CommandLog.class)))
+        when(orderWriteService.writeAcceptedPlace(any(OrderWriteService.AcceptedPlaceCommand.class)))
                 .thenAnswer(invocation -> {
-                    CommandLog log = invocation.getArgument(0);
-                    setCommandLogId(log, 100L);
-                    return log;
+                    OrderWriteService.AcceptedPlaceCommand accepted = invocation.getArgument(0);
+                    setCommandLogId(accepted.commandLog(), 100L);
+                    return new OrderWriteService.AcceptedPlaceWrite(accepted.commandLog(), null, null);
                 });
 
         // when
         placeOrder.handle(command);
 
         // then
-        ArgumentCaptor<CommandLog> logCaptor = ArgumentCaptor.forClass(CommandLog.class);
+        ArgumentCaptor<OrderWriteService.AcceptedPlaceCommand> writeCaptor =
+                ArgumentCaptor.forClass(OrderWriteService.AcceptedPlaceCommand.class);
         ArgumentCaptor<CommandMessage> messageCaptor = ArgumentCaptor.forClass(CommandMessage.class);
-        verify(commandLogAppendService).append(logCaptor.capture());
+        verify(orderWriteService).writeAcceptedPlace(writeCaptor.capture());
         verify(commandDispatcher).dispatch(messageCaptor.capture());
 
-        CommandLog appended = logCaptor.getValue();
+        OrderWriteService.AcceptedPlaceCommand persisted = writeCaptor.getValue();
         assertThat(messageCaptor.getValue()).isInstanceOf(CommandMessage.Place.class);
         CommandMessage.Place dispatched = (CommandMessage.Place) messageCaptor.getValue();
         assertThat(dispatched.commandLogId()).isEqualTo(100L);
         assertThat(dispatched.clientOrderId()).isEqualTo(command.clientOrderId());
-        assertThat(dispatched.orderKey()).isEqualTo(appended.getCommandId());
+        assertThat(dispatched.orderKey()).isEqualTo(persisted.commandLog().getCommandId());
         assertThat(dispatched.baseAssetScale()).isEqualTo(activeMarket.getBaseAsset().getDecimals().intValue());
     }
 
@@ -164,11 +176,11 @@ class PlaceOrderTest {
                 .thenReturn(Optional.empty());
         when(userRepository.findById(1L)).thenReturn(Optional.of(activeUser));
         when(marketRepository.findWithAssetsById(1L)).thenReturn(Optional.of(activeMarket));
-        when(commandLogAppendService.append(any(CommandLog.class)))
+        when(orderWriteService.writeAcceptedPlace(any(OrderWriteService.AcceptedPlaceCommand.class)))
                 .thenAnswer(invocation -> {
-                    CommandLog log = invocation.getArgument(0);
-                    setCommandLogId(log, 100L);
-                    return log;
+                    OrderWriteService.AcceptedPlaceCommand accepted = invocation.getArgument(0);
+                    setCommandLogId(accepted.commandLog(), 100L);
+                    return new OrderWriteService.AcceptedPlaceWrite(accepted.commandLog(), null, null);
                 });
 
         // when
@@ -186,7 +198,7 @@ class PlaceOrderTest {
     }
 
     @Test
-    @DisplayName("Happy : dispatch 실패여도 append 성공이면 ACCEPTED 응답을 반환한다.")
+    @DisplayName("Happy : dispatch 실패여도 ingress write 성공이면 ACCEPTED 응답을 반환한다.")
     void handle_returns_accepted_when_dispatch_fails() {
         // given
         PlaceOrder.Command command = validCommand();
@@ -197,11 +209,11 @@ class PlaceOrderTest {
                 .thenReturn(Optional.empty());
         when(userRepository.findById(1L)).thenReturn(Optional.of(activeUser));
         when(marketRepository.findWithAssetsById(1L)).thenReturn(Optional.of(activeMarket));
-        when(commandLogAppendService.append(any(CommandLog.class)))
+        when(orderWriteService.writeAcceptedPlace(any(OrderWriteService.AcceptedPlaceCommand.class)))
                 .thenAnswer(invocation -> {
-                    CommandLog log = invocation.getArgument(0);
-                    setCommandLogId(log, 100L);
-                    return log;
+                    OrderWriteService.AcceptedPlaceCommand accepted = invocation.getArgument(0);
+                    setCommandLogId(accepted.commandLog(), 100L);
+                    return new OrderWriteService.AcceptedPlaceWrite(accepted.commandLog(), null, null);
                 });
         doThrow(new RuntimeException("dispatch failed"))
                 .when(commandDispatcher).dispatch(any(CommandMessage.class));
@@ -247,6 +259,7 @@ class PlaceOrderTest {
         assertThat(ack.commandType()).isEqualTo(CommandType.PLACE_ORDER);
         verify(userRepository, never()).findById(any());
         verify(marketRepository, never()).findWithAssetsById(any());
+        verify(orderWriteService, never()).writeAcceptedPlace(any(OrderWriteService.AcceptedPlaceCommand.class));
         verify(commandLogAppendService, never()).append(any(CommandLog.class));
     }
 
@@ -254,7 +267,6 @@ class PlaceOrderTest {
     @MethodSource("missingRequiredInputs")
     @DisplayName("Negative : 필수 입력값 누락이면 BusinessException을 반환한다.")
     void handle_with_missing_required_value(String caseName, PlaceOrder.Command command) {
-        // when & then
         assertThatThrownBy(() -> placeOrder.handle(command))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MISSING_ORDER_REQUIRED_VALUE);
@@ -368,7 +380,7 @@ class PlaceOrderTest {
         assertThatThrownBy(() -> placeOrder.handle(invalid))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_LIMIT_BID_INPUT);
-        verify(commandLogAppendService, never()).append(any(CommandLog.class));
+        verify(orderWriteService, never()).writeAcceptedPlace(any(OrderWriteService.AcceptedPlaceCommand.class));
     }
 
     @Test
@@ -391,7 +403,7 @@ class PlaceOrderTest {
         assertThatThrownBy(() -> placeOrder.handle(invalid))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_MARKET_BID_INPUT);
-        verify(commandLogAppendService, never()).append(any(CommandLog.class));
+        verify(orderWriteService, never()).writeAcceptedPlace(any(OrderWriteService.AcceptedPlaceCommand.class));
     }
 
     @Test
@@ -414,7 +426,7 @@ class PlaceOrderTest {
         assertThatThrownBy(() -> placeOrder.handle(invalid))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.UNSUPPORTED_TIME_IN_FORCE);
-        verify(commandLogAppendService, never()).append(any(CommandLog.class));
+        verify(orderWriteService, never()).writeAcceptedPlace(any(OrderWriteService.AcceptedPlaceCommand.class));
     }
 
     private PlaceOrder.Command validCommand() {

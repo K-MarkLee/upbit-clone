@@ -76,7 +76,7 @@ public class Order extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private OrderStatus status = OrderStatus.OPEN;
+    private OrderStatus status = OrderStatus.PENDING;
 
     @Column(name = "cancel_reason", length = 50)
     private String cancelReason;
@@ -104,7 +104,7 @@ public class Order extends BaseEntity {
         this.quoteAmount = command.quoteAmount();
         this.executedQuantity = new NonNegativeAmount(BigDecimal.ZERO).value();
         this.executedQuoteAmount = new NonNegativeAmount(BigDecimal.ZERO).value();
-        this.status = OrderStatus.OPEN;
+        this.status = OrderStatus.PENDING;
         this.cancelReason = null;
     }
 
@@ -345,10 +345,22 @@ public class Order extends BaseEntity {
         return Math.max(value.stripTrailingZeros().scale(), 0);
     }
 
+    // worker가 무체결 resting 주문을 실제 오더북에 올렸을 때 OPEN으로 확정한다.
+    public void markOpen() {
+        if (this.status == OrderStatus.OPEN) {
+            return;
+        }
+        if (this.status != OrderStatus.PENDING) {
+            throw new BusinessException(ErrorCode.ORDER_NOT_OPEN);
+        }
+        this.status = OrderStatus.OPEN;
+        this.cancelReason = null;
+    }
+
     // 체결 수량 적용
     public void applyExecutedQuantity(BigDecimal executedQuantity, BigDecimal executedQuoteAmount) {
-        // OPEN 상태 검증
-        if (this.status != OrderStatus.OPEN) {
+        // worker가 처리 중인 PENDING, 이미 book에 오른 OPEN만 체결 가능하다.
+        if (this.status != OrderStatus.PENDING && this.status != OrderStatus.OPEN) {
             throw new BusinessException(ErrorCode.ORDER_NOT_OPEN);
         }
 
@@ -363,16 +375,19 @@ public class Order extends BaseEntity {
         this.executedQuantity = this.executedQuantity.add(executedQuantity);
         this.executedQuoteAmount = this.executedQuoteAmount.add(executedQuoteAmount);
 
-        // 상태 open -> filled 변경.
         if (isFilledNow()) {
             this.status = OrderStatus.FILLED;
             this.cancelReason = null;
+            return;
         }
+
+        // 부분 체결이 발생했고 주문이 아직 살아 있다면 worker 처리 완료 상태로 승격한다.
+        this.status = OrderStatus.OPEN;
     }
 
     // 취소 이유 수정
     public void cancel(String reason) {
-        if (this.status != OrderStatus.OPEN) {
+        if (this.status == OrderStatus.FILLED || this.status == OrderStatus.CANCELED) {
             return;
         }
         this.status = OrderStatus.CANCELED;

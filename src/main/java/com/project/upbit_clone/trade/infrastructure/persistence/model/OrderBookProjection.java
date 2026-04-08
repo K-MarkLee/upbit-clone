@@ -33,6 +33,8 @@ public class OrderBookProjection {
     private LocalDateTime updatedAt;
 
     public static OrderBookProjection create(
+            // TODO : 저장 검증 필요 즉 worker의 result에만 의존하면안됨.
+
             OrderBookProjectionId id,
             BigDecimal totalQty,
             Integer orderCount
