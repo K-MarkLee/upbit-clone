@@ -20,6 +20,7 @@ class InMemoryOrderBookTest {
         InMemoryOrderBook orderBook = new InMemoryOrderBook();
         BookOrderEntry entry = BookOrderEntry.create(
                 orderKey(101L),
+                userId(101L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("1.25")
@@ -45,6 +46,7 @@ class InMemoryOrderBookTest {
         InMemoryOrderBook orderBook = new InMemoryOrderBook();
         BookOrderEntry entry = BookOrderEntry.create(
                 orderKey(101L),
+                userId(101L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("1.25")
@@ -67,12 +69,14 @@ class InMemoryOrderBookTest {
         PriceLevel level = PriceLevel.create(OrderSide.BID, new BigDecimal("50000"));
         BookOrderEntry first = BookOrderEntry.create(
                 orderKey(101L),
+                userId(101L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("1.0")
         );
         BookOrderEntry second = BookOrderEntry.create(
                 orderKey(102L),
+                userId(102L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("2.0")
@@ -94,24 +98,28 @@ class InMemoryOrderBookTest {
 
         orderBook.add(BookOrderEntry.create(
                 orderKey(101L),
+                userId(101L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("1.0")
         ));
         orderBook.add(BookOrderEntry.create(
                 orderKey(102L),
+                userId(102L),
                 OrderSide.BID,
                 new BigDecimal("51000"),
                 new BigDecimal("1.0")
         ));
         orderBook.add(BookOrderEntry.create(
                 orderKey(201L),
+                userId(201L),
                 OrderSide.ASK,
                 new BigDecimal("52000"),
                 new BigDecimal("1.0")
         ));
         orderBook.add(BookOrderEntry.create(
                 orderKey(202L),
+                userId(202L),
                 OrderSide.ASK,
                 new BigDecimal("51500"),
                 new BigDecimal("1.0")
@@ -129,36 +137,42 @@ class InMemoryOrderBookTest {
         InMemoryOrderBook orderBook = new InMemoryOrderBook();
         BookOrderEntry bestBidHead = BookOrderEntry.create(
                 orderKey(101L),
+                userId(101L),
                 OrderSide.BID,
                 new BigDecimal("51000"),
                 new BigDecimal("1.0")
         );
         BookOrderEntry sameBestBidSecond = BookOrderEntry.create(
                 orderKey(102L),
+                userId(102L),
                 OrderSide.BID,
                 new BigDecimal("51000"),
                 new BigDecimal("2.0")
         );
         BookOrderEntry lowerBid = BookOrderEntry.create(
                 orderKey(103L),
+                userId(103L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("3.0")
         );
         BookOrderEntry bestAskHead = BookOrderEntry.create(
                 orderKey(201L),
+                userId(201L),
                 OrderSide.ASK,
                 new BigDecimal("51500"),
                 new BigDecimal("1.0")
         );
         BookOrderEntry sameBestAskSecond = BookOrderEntry.create(
                 orderKey(202L),
+                userId(202L),
                 OrderSide.ASK,
                 new BigDecimal("51500"),
                 new BigDecimal("2.0")
         );
         BookOrderEntry higherAsk = BookOrderEntry.create(
                 orderKey(203L),
+                userId(203L),
                 OrderSide.ASK,
                 new BigDecimal("52000"),
                 new BigDecimal("3.0")
@@ -190,6 +204,7 @@ class InMemoryOrderBookTest {
         InMemoryOrderBook orderBook = new InMemoryOrderBook();
         orderBook.add(BookOrderEntry.create(
                 orderKey(101L),
+                userId(101L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("1.0")
@@ -212,12 +227,14 @@ class InMemoryOrderBookTest {
         InMemoryOrderBook orderBook = new InMemoryOrderBook();
         orderBook.add(BookOrderEntry.create(
                 orderKey(101L),
+                userId(101L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("10")
         ));
         orderBook.add(BookOrderEntry.create(
                 orderKey(102L),
+                userId(102L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("5")
@@ -246,12 +263,14 @@ class InMemoryOrderBookTest {
         InMemoryOrderBook orderBook = new InMemoryOrderBook();
         orderBook.add(BookOrderEntry.create(
                 orderKey(101L),
+                userId(101L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("10")
         ));
         orderBook.add(BookOrderEntry.create(
                 orderKey(102L),
+                userId(102L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("5")
@@ -281,6 +300,7 @@ class InMemoryOrderBookTest {
         InMemoryOrderBook orderBook = new InMemoryOrderBook();
         orderBook.add(BookOrderEntry.create(
                 orderKey(101L),
+                userId(101L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("10")
@@ -307,12 +327,14 @@ class InMemoryOrderBookTest {
         InMemoryOrderBook orderBook = new InMemoryOrderBook();
         orderBook.add(BookOrderEntry.create(
                 orderKey(101L),
+                userId(101L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("10")
         ));
         orderBook.add(BookOrderEntry.create(
                 orderKey(102L),
+                userId(102L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("5")
@@ -340,6 +362,7 @@ class InMemoryOrderBookTest {
         InMemoryOrderBook orderBook = new InMemoryOrderBook();
         BookOrderEntry entry = BookOrderEntry.create(
                 orderKey(101L),
+                userId(101L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("10")
@@ -364,6 +387,7 @@ class InMemoryOrderBookTest {
         InMemoryOrderBook orderBook = new InMemoryOrderBook();
         orderBook.add(BookOrderEntry.create(
                 orderKey(101L),
+                userId(101L),
                 OrderSide.BID,
                 new BigDecimal("50000"),
                 new BigDecimal("10")
@@ -379,5 +403,9 @@ class InMemoryOrderBookTest {
 
     private static String orderKey(Long orderId) {
         return "order-key-" + orderId;
+    }
+
+    private static Long userId(Long orderId) {
+        return 1_000_000L + orderId;
     }
 }

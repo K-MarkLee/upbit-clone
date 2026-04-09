@@ -155,6 +155,26 @@ class MatchingEngineCoreTest {
     }
 
     @Test
+    @DisplayName("Negative : LIMIT-BID 주문은 최우선 교차 ask가 자기 주문이면 CN 정책으로 취소된다.")
+    void place_limit_bid_with_self_crossed_ask_returns_canceled() {
+        // given
+        InMemoryOrderBook orderBook = orderBook(
+                BookOrderEntry.create(orderKey(901L), userId, OrderSide.ASK, decimal("900"), decimal("2"))
+        );
+        CommandMessage.Place message = limitBid("1000", "2");
+
+        // when
+        EngineResult.PlaceResult result = matchingEngineCore.place(message, orderBook);
+
+        // then
+        assertCanceledWithoutExecution(result, "2", "2000", EngineResult.CancelReason.SELF_TRADE_PREVENTED);
+        assertThat(orderBook.findOrder(orderKey(901L))).isPresent();
+        assertThat(orderBook.findOrder(message.orderKey())).isEmpty();
+        assertThat(requiredLevelSnapshot(orderBook, OrderSide.ASK, decimal("900")).totalQty())
+                .isEqualByComparingTo("2");
+    }
+
+    @Test
     @DisplayName("Negative : LIMIT-ASK 주문은 교차 bid가 없으면 resting 된다.")
     void place_limit_ask_without_crossed_bid_returns_open() {
         // given
@@ -251,6 +271,25 @@ class MatchingEngineCoreTest {
         assertMatchDeltaAt(result, 1, OrderSide.ASK, "8", "1", 1, "0", 0);
         assertThat(orderBook.findOrder(orderKey(207L))).isEmpty();
         assertThat(orderBook.findOrder(orderKey(208L))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Negative : MARKET-BID 주문은 최우선 ask가 자기 주문이면 CN 정책으로 취소된다.")
+    void place_market_bid_with_self_best_ask_returns_canceled() {
+        // given
+        InMemoryOrderBook orderBook = orderBook(
+                BookOrderEntry.create(orderKey(902L), userId, OrderSide.ASK, decimal("7"), decimal("2"))
+        );
+        CommandMessage.Place message = marketBid("14");
+
+        // when
+        EngineResult.PlaceResult result = matchingEngineCore.place(message, orderBook);
+
+        // then
+        assertCanceledWithoutExecution(result, null, "14", EngineResult.CancelReason.SELF_TRADE_PREVENTED);
+        assertThat(orderBook.findOrder(orderKey(902L))).isPresent();
+        assertThat(requiredLevelSnapshot(orderBook, OrderSide.ASK, decimal("7")).totalQty())
+                .isEqualByComparingTo("2");
     }
 
     @Test
@@ -589,11 +628,15 @@ class MatchingEngineCoreTest {
     }
 
     private static BookOrderEntry maker(Long orderId, OrderSide side, String price, String quantity) {
-        return BookOrderEntry.create(orderKey(orderId), side, decimal(price), decimal(quantity));
+        return BookOrderEntry.create(orderKey(orderId), userId(orderId), side, decimal(price), decimal(quantity));
     }
 
     private static String orderKey(Long orderId) {
         return "order-key-" + orderId;
+    }
+
+    private static Long userId(Long orderId) {
+        return 1_000_000L + orderId;
     }
 
     private static BigDecimal decimal(String value) {

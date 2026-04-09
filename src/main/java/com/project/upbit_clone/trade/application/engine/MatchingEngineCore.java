@@ -64,6 +64,10 @@ public class MatchingEngineCore {
                 stopReason = StopReason.NOT_CROSSED;
                 break;
             }
+            if (isSelfTrade(message, makerHead)) {
+                stopReason = StopReason.SELF_TRADE_BLOCKED;
+                break;
+            }
 
             // executed 계산.
             // executedQuantity = 체결 수량 (taker의 남은수량과 maker의 남은수량 중 낮은값)
@@ -124,6 +128,18 @@ public class MatchingEngineCore {
             );
         }
 
+        if (loopResult.stopReason() == StopReason.SELF_TRADE_BLOCKED) {
+            return EngineResult.PlaceResult.canceled(
+                    loopResult.executedQuantity(),
+                    loopResult.executedQuoteAmount(),
+                    loopResult.remainingQuantity(),
+                    calculateCanceledUnlockAmount(message, loopResult),
+                    EngineResult.CancelReason.SELF_TRADE_PREVENTED,
+                    loopResult.fills(),
+                    loopResult.bookDeltas()
+            );
+        }
+
         if (message.orderType() == OrderType.LIMIT) {
             return restQuantityBasedLimitOrder(message, loopResult, orderBook);
         }
@@ -150,6 +166,7 @@ public class MatchingEngineCore {
         // order book 엔트리 생성
         BookOrderEntry restingEntry = BookOrderEntry.create(
                 message.orderKey(),
+                message.userId(),
                 message.orderSide(),
                 message.price(),
                 loopResult.remainingQuantity()
@@ -199,6 +216,10 @@ public class MatchingEngineCore {
             }
 
             BookOrderEntry makerHead = bestOppositeHead.get();
+            if (isSelfTrade(message, makerHead)) {
+                stopReason = StopReason.SELF_TRADE_BLOCKED;
+                break;
+            }
             //executableBudget = min(taker 거래가능 금액, maker 남은 quantity * price)
             BigDecimal executableBudget = remainingQuoteAmount.min(
                     makerHead.getPrice().multiply(makerHead.getRemainingQty())
@@ -281,6 +302,9 @@ public class MatchingEngineCore {
     }
 
     private EngineResult.CancelReason resolveNoRestCancelReason(StopReason stopReason, boolean hasExecution) {
+        if (stopReason == StopReason.SELF_TRADE_BLOCKED) {
+            return EngineResult.CancelReason.SELF_TRADE_PREVENTED;
+        }
         if (hasExecution) {
             return EngineResult.CancelReason.IOC_REMAINDER;
         }
@@ -288,6 +312,7 @@ public class MatchingEngineCore {
             case NO_OPPOSITE -> EngineResult.CancelReason.NO_TRADE_STREAM;
             case NOT_CROSSED, NO_EXECUTABLE_SIZE -> EngineResult.CancelReason.IOC_NOT_MATCHED;
             case TAKER_FILLED -> throw new EngineException("filled 상태는 cancelReason을 가질 수 없습니다.");
+            case SELF_TRADE_BLOCKED -> throw new EngineException("self trade 상태는 사전 처리되어야 합니다.");
         };
     }
 
@@ -308,6 +333,10 @@ public class MatchingEngineCore {
         return message.orderSide() == OrderSide.BID
                 ? message.price().compareTo(oppositeBestPrice) >= 0
                 : message.price().compareTo(oppositeBestPrice) <= 0;
+    }
+
+    private boolean isSelfTrade(CommandMessage.Place message, BookOrderEntry makerHead) {
+        return makerHead.getUserId().equals(message.userId());
     }
 
     private BigDecimal requireQuantity(CommandMessage.Place message) {
@@ -370,7 +399,8 @@ public class MatchingEngineCore {
         NO_OPPOSITE,
         NOT_CROSSED,
         TAKER_FILLED,
-        NO_EXECUTABLE_SIZE
+        NO_EXECUTABLE_SIZE,
+        SELF_TRADE_BLOCKED
     }
 
     private record QuantityLoopResult(

@@ -239,7 +239,8 @@ public final class EngineResult {
         USER_REQUEST,
         IOC_REMAINDER,
         IOC_NOT_MATCHED,
-        NO_TRADE_STREAM
+        NO_TRADE_STREAM,
+        SELF_TRADE_PREVENTED
     }
 
     private static BigDecimal nonNegativeOrZero(BigDecimal value) {
