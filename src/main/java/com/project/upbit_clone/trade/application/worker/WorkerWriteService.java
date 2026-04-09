@@ -376,13 +376,13 @@ public class WorkerWriteService {
                 message.marketId(),
                 targetOrder.getId(),
                 statusPayload(
-                        targetOrder,
-                        OrderStatus.CANCELED,
-                        targetOrder.getExecutedQuantity(),
-                        targetOrder.getExecutedQuoteAmount(),
-                        remainingQuantity(targetOrder),
-                        cancelReason
-                )
+                    targetOrder,
+                    OrderStatus.CANCELED,
+                    targetOrder.getExecutedQuantity(),
+                    targetOrder.getExecutedQuoteAmount(),
+                    remainingQuantityForStatusPayload(targetOrder),
+                    cancelReason
+            )
         ));
 
         if (unlockAmount.compareTo(BigDecimal.ZERO) > 0) {
@@ -399,7 +399,7 @@ public class WorkerWriteService {
         if (removedLevelDelta != null) {
             events.add(createEventLog(
                     commandLogRef,
-                    eventId(message.commandLogId(), eventSequence++),
+                    eventId(message.commandLogId(), eventSequence),
                     EventType.ORDER_BOOK_DELTA,
                     message.marketId(),
                     targetOrder.getId(),
@@ -578,6 +578,13 @@ public class WorkerWriteService {
             }
             return requiredAmount(order.getPrice(), "limit bid 주문의 price가 없습니다.")
                     .multiply(remainingQuantity(order));
+        }
+        return remainingQuantity(order);
+    }
+
+    private BigDecimal remainingQuantityForStatusPayload(Order order) {
+        if (order.getOrderType() == OrderType.MARKET && order.getOrderSide() == OrderSide.BID) {
+            return null;
         }
         return remainingQuantity(order);
     }

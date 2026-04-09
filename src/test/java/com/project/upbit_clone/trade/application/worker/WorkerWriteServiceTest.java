@@ -308,6 +308,43 @@ class WorkerWriteServiceTest {
                 .containsExactly(EventType.ORDER_CANCELED, EventType.FUNDS_UNLOCKED);
     }
 
+    @Test
+    @DisplayName("Happy : PENDING MARKET-BID 주문 cancel이면 remainingQuantity 없이 이벤트를 저장한다.")
+    void writeCancel_cancels_pending_market_bid_without_remaining_quantity() {
+        User user = user(1L, "user@test.com");
+        Market market = market(100L);
+        Order order = pendingMarketBidOrder(11L, market, user, "pending-market-bid-order", new BigDecimal("10000"));
+        Wallet quoteWallet = wallet(1001L, user, market.getQuoteAsset(), BigDecimal.ZERO, new BigDecimal("10000"));
+        CommandLog commandLog = commandLog(32L, 100L, CommandType.CANCEL_ORDER);
+
+        CommandMessage.Cancel message = new CommandMessage.Cancel(
+                32L,
+                user.getId(),
+                100L,
+                "KRW-BTC",
+                "cid-3",
+                order.getOrderKey(),
+                null
+        );
+
+        when(orderRepository.findByOrderKey(order.getOrderKey())).thenReturn(Optional.of(order));
+        when(walletRepository.findAllByUserIdInAndAssetIdIn(any(), any())).thenReturn(List.of(quoteWallet));
+        when(commandLogRepository.getReferenceById(32L)).thenReturn(commandLog);
+
+        workerWriteService.writeCancel(message, null);
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(quoteWallet.getAvailableBalance()).isEqualByComparingTo("10000");
+        assertThat(quoteWallet.getLockedBalance()).isEqualByComparingTo("0");
+
+        verify(eventLogRepository).saveAll(eventCaptor.capture());
+        assertThat(eventCaptor.getValue())
+                .extracting(EventLog::getEventType)
+                .containsExactly(EventType.ORDER_CANCELED, EventType.FUNDS_UNLOCKED);
+        assertThat(eventCaptor.getValue().iterator().next().getPayload())
+                .contains("\"remainingQuantity\":null");
+    }
+
     private static User user(Long id, String email) {
         User user = User.create(email, email, EnumStatus.ACTIVE, "pw");
         setField(user, "id", id);
@@ -367,6 +404,29 @@ class WorkerWriteServiceTest {
     ) {
         Order order = pendingOrder(id, market, user, orderKey, side, price, quantity);
         order.markOpen();
+        return order;
+    }
+
+    private static Order pendingMarketBidOrder(
+            Long id,
+            Market market,
+            User user,
+            String orderKey,
+            BigDecimal quoteAmount
+    ) {
+        Order order = Order.create(new Order.CreateCommand(
+                market,
+                user,
+                orderKey + "-cid",
+                orderKey,
+                OrderSide.BID,
+                OrderType.MARKET,
+                TimeInForce.IOC,
+                null,
+                null,
+                quoteAmount
+        ));
+        setField(order, "id", id);
         return order;
     }
 
