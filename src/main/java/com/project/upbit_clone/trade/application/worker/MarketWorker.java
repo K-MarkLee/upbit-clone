@@ -119,15 +119,16 @@ public class MarketWorker {
 
     // 취소처리
     private void handleCancel(CommandMessage.Cancel message) {
-        boolean removed = orderBook.remove(message.targetOrderKey()).isPresent();
+        InMemoryOrderBook.LevelDelta removedLevelDelta = orderBook.remove(message.targetOrderKey()).orElse(null);
         log.debug(
                 "주문(cancel) 처리 결과: marketId={}, marketCode={}, commandLogId={}, targetOrderKey={}, removed={}",
                 marketId,
                 marketCode,
                 message.commandLogId(),
                 message.targetOrderKey(),
-                removed
+                removedLevelDelta != null
         );
+        workerWriteService.writeCancel(message, removedLevelDelta);
     }
 
     private synchronized void bindMarketCode(String marketCode) {

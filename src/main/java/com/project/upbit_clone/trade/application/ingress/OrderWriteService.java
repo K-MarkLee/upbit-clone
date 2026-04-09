@@ -43,9 +43,6 @@ public class OrderWriteService {
         Objects.requireNonNull(command.user(), "user는 null일 수 없습니다.");
         Objects.requireNonNull(command.market(), "market은 null일 수 없습니다.");
 
-        CommandLog savedCommandLog = commandLogRepository.saveAndFlush(command.commandLog());
-
-        Wallet reservedWallet = reserveWallet(command);
         Order pendingOrder = Order.create(new Order.CreateCommand(
                 command.market(),
                 command.user(),
@@ -59,6 +56,8 @@ public class OrderWriteService {
                 command.quoteAmount()
         ));
 
+        CommandLog savedCommandLog = commandLogRepository.saveAndFlush(command.commandLog());
+        Wallet reservedWallet = reserveWallet(command);
         Wallet savedWallet = walletRepository.save(reservedWallet);
         Order savedOrder = orderRepository.save(pendingOrder);
 

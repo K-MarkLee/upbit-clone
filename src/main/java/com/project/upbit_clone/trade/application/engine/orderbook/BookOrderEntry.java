@@ -10,27 +10,31 @@ import java.math.BigDecimal;
 public class BookOrderEntry {
 
     private final String orderKey;
+    private final Long userId;
     private final OrderSide side;
     private final BigDecimal price;
     private BigDecimal remainingQty;
 
     public static BookOrderEntry create(
             String orderKey,
+            Long userId,
             OrderSide side,
             BigDecimal price,
             BigDecimal remainingQty
     ) {
-        validateCreateInput(orderKey, side, price, remainingQty);
-        return new BookOrderEntry(orderKey, side, price, remainingQty);
+        validateCreateInput(orderKey, userId, side, price, remainingQty);
+        return new BookOrderEntry(orderKey, userId, side, price, remainingQty);
     }
 
     private BookOrderEntry(
             String orderKey,
+            Long userId,
             OrderSide side,
             BigDecimal price,
             BigDecimal remainingQty
     ) {
         this.orderKey = orderKey;
+        this.userId = userId;
         this.side = side;
         this.price = price;
         this.remainingQty = remainingQty;
@@ -38,11 +42,12 @@ public class BookOrderEntry {
 
     private static void validateCreateInput(
             String orderKey,
+            Long userId,
             OrderSide side,
             BigDecimal price,
             BigDecimal remainingQty
     ) {
-        if (orderKey == null || orderKey.isBlank() || side == null || price == null || remainingQty == null) {
+        if (orderKey == null || orderKey.isBlank() || userId == null || side == null || price == null || remainingQty == null) {
             throw new IllegalArgumentException("order entry 필수값이 누락되어 있습니다.");
         }
         if (price.compareTo(BigDecimal.ZERO) <= 0) {
