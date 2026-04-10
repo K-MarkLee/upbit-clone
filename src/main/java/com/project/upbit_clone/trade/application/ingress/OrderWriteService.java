@@ -2,6 +2,7 @@ package com.project.upbit_clone.trade.application.ingress;
 
 import com.project.upbit_clone.global.exception.BusinessException;
 import com.project.upbit_clone.global.exception.ErrorCode;
+import com.project.upbit_clone.trade.application.service.LedgerWriteService;
 import com.project.upbit_clone.trade.domain.model.Market;
 import com.project.upbit_clone.trade.domain.model.Order;
 import com.project.upbit_clone.trade.domain.repository.OrderRepository;
@@ -10,9 +11,12 @@ import com.project.upbit_clone.trade.domain.vo.OrderType;
 import com.project.upbit_clone.trade.domain.vo.TimeInForce;
 import com.project.upbit_clone.trade.infrastructure.persistence.model.CommandLog;
 import com.project.upbit_clone.trade.infrastructure.persistence.repository.CommandLogRepository;
+import com.project.upbit_clone.wallet.domain.model.Ledger;
 import com.project.upbit_clone.user.domain.model.User;
 import com.project.upbit_clone.wallet.domain.model.Wallet;
 import com.project.upbit_clone.wallet.domain.repository.WalletRepository;
+import com.project.upbit_clone.wallet.domain.vo.ChangeType;
+import com.project.upbit_clone.wallet.domain.vo.LedgerType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,15 +29,18 @@ public class OrderWriteService {
     private final CommandLogRepository commandLogRepository;
     private final OrderRepository orderRepository;
     private final WalletRepository walletRepository;
+    private final LedgerWriteService ledgerWriteService;
 
     public OrderWriteService(
             CommandLogRepository commandLogRepository,
             OrderRepository orderRepository,
-            WalletRepository walletRepository
+            WalletRepository walletRepository,
+            LedgerWriteService ledgerWriteService
     ) {
         this.commandLogRepository = commandLogRepository;
         this.orderRepository = orderRepository;
         this.walletRepository = walletRepository;
+        this.ledgerWriteService = ledgerWriteService;
     }
 
     @Transactional
@@ -57,22 +64,42 @@ public class OrderWriteService {
         ));
 
         CommandLog savedCommandLog = commandLogRepository.saveAndFlush(command.commandLog());
-        Wallet reservedWallet = reserveWallet(command);
-        Wallet savedWallet = walletRepository.save(reservedWallet);
-        Order savedOrder = orderRepository.save(pendingOrder);
+        ReservedWallet reservedWallet = reserveWallet(command);
+        Wallet savedWallet = walletRepository.saveAndFlush(reservedWallet.wallet());
+        Order savedOrder = orderRepository.saveAndFlush(pendingOrder);
+        Ledger savedLedger = ledgerWriteService.save(ledgerWriteService.createOrderLedger(
+                new LedgerWriteService.OrderLedgerSpec(
+                        savedWallet,
+                        reservedWallet.beforeSnapshot(),
+                        reservedWallet.afterSnapshot(),
+                        new LedgerWriteService.LedgerMutation(
+                                LedgerType.ORDER_LOCK,
+                                ChangeType.DECREASE,
+                                reservedWallet.lockAmount()
+                        ),
+                        savedOrder,
+                        new LedgerWriteService.LedgerMeta(
+                                "ORDER_LOCK",
+                                orderLockIdempotencyKey(savedOrder)
+                        )
+                )
+        ));
 
-        return new AcceptedPlaceWrite(savedCommandLog, savedWallet, savedOrder);
+        return new AcceptedPlaceWrite(savedCommandLog, savedWallet, savedOrder, savedLedger);
     }
 
-    private Wallet reserveWallet(AcceptedPlaceCommand command) {
+    private ReservedWallet reserveWallet(AcceptedPlaceCommand command) {
         Wallet wallet = walletRepository.findByUserIdAndAssetId(
                         command.user().getId(),
                         resolveLockAssetId(command)
                 )
                 .orElseThrow(() -> new BusinessException(resolveWalletNotFoundError(command.orderSide())));
 
-        wallet.lock(calculateLockAmount(command));
-        return wallet;
+        BigDecimal lockAmount = calculateLockAmount(command);
+        LedgerWriteService.BalanceSnapshot beforeSnapshot = ledgerWriteService.capture(wallet);
+        wallet.lock(lockAmount);
+        LedgerWriteService.BalanceSnapshot afterSnapshot = ledgerWriteService.capture(wallet);
+        return new ReservedWallet(wallet, beforeSnapshot, afterSnapshot, lockAmount);
     }
 
     private Long resolveLockAssetId(AcceptedPlaceCommand command) {
@@ -102,6 +129,10 @@ public class OrderWriteService {
         return command.price().multiply(command.quantity());
     }
 
+    private String orderLockIdempotencyKey(Order order) {
+        return "order:" + order.getOrderKey() + ":lock";
+    }
+
     public record AcceptedPlaceCommand(
             CommandLog commandLog,
             User user,
@@ -120,7 +151,16 @@ public class OrderWriteService {
     public record AcceptedPlaceWrite(
             CommandLog commandLog,
             Wallet wallet,
-            Order order
+            Order order,
+            Ledger ledger
+    ) {
+    }
+
+    private record ReservedWallet(
+            Wallet wallet,
+            LedgerWriteService.BalanceSnapshot beforeSnapshot,
+            LedgerWriteService.BalanceSnapshot afterSnapshot,
+            BigDecimal lockAmount
     ) {
     }
 }

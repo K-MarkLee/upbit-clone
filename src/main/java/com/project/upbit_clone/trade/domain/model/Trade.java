@@ -44,7 +44,7 @@ public class Trade {
     @JoinColumn(name = "sell_order_id", nullable = false)
     private Order sellOrder;
 
-    @Column(name = "trade_key", nullable = false, length = 64)
+    @Column(name = "trade_key", nullable = false, length = 128)
     private String tradeKey;
 
     @Enumerated(EnumType.STRING)
@@ -154,7 +154,7 @@ public class Trade {
                 || command.sellOrder() == null
                 || command.tradeKey() == null
                 || command.tradeKey().isBlank()
-                || command.tradeKey().length() > 64
+                || command.tradeKey().length() > 128
                 || command.makerOrderSide() == null
                 || command.price() == null
                 || command.quantity() == null

@@ -103,13 +103,13 @@ class TradeTest {
     }
 
     @Test
-    @DisplayName("Negative : trade_key가 64자를 초과하면 BusinessException을 반환한다.")
+    @DisplayName("Negative : trade_key가 128자를 초과하면 BusinessException을 반환한다.")
     void create_trade_with_too_long_trade_key() {
         Trade.CreateCommand command = new Trade.CreateCommand(
                 market,
                 buyOrder,
                 sellOrder,
-                "t".repeat(65),
+                "t".repeat(129),
                 OrderSide.ASK,
                 sellOrder.getPrice(),
                 BigDecimal.ONE,

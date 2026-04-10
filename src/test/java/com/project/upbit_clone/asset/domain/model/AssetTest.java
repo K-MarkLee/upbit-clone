@@ -63,7 +63,7 @@ class AssetTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_ASSET_INPUT);
 
-        // decimals null
+        // decimal null
         assertThatThrownBy(() -> Asset.create(symbol, name, null, status))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_ASSET_INPUT);
@@ -124,5 +124,16 @@ class AssetTest {
 
         // then
         assertThat(result).isFalse();
+    }
+
+    @Test
+    @DisplayName("Negative : asset decimal에 8초과의 값을 넣으면 IllegalArgumentException를 반환한다.")
+    void create_asset_with_invalid_decimals() {
+        Byte nine = 9;
+
+        // then
+        assertThatThrownBy(() -> Asset.create(symbol, name, nine, status))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("자산 소수점 자릿수는 0 이상 8 이하여야 합니다.");
     }
 }

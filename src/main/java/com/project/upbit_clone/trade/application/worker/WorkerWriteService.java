@@ -6,6 +6,7 @@ import com.project.upbit_clone.global.exception.ErrorCode;
 import com.project.upbit_clone.trade.application.dispatch.CommandMessage;
 import com.project.upbit_clone.trade.application.engine.EngineResult;
 import com.project.upbit_clone.trade.application.engine.orderbook.InMemoryOrderBook;
+import com.project.upbit_clone.trade.application.service.LedgerWriteService;
 import com.project.upbit_clone.trade.domain.model.Order;
 import com.project.upbit_clone.trade.domain.model.Trade;
 import com.project.upbit_clone.trade.domain.repository.OrderRepository;
@@ -22,8 +23,11 @@ import com.project.upbit_clone.trade.infrastructure.persistence.repository.Consu
 import com.project.upbit_clone.trade.infrastructure.persistence.repository.EventLogRepository;
 import com.project.upbit_clone.trade.infrastructure.persistence.vo.EventType;
 import com.project.upbit_clone.trade.infrastructure.persistence.vo.LogType;
+import com.project.upbit_clone.wallet.domain.model.Ledger;
 import com.project.upbit_clone.wallet.domain.model.Wallet;
 import com.project.upbit_clone.wallet.domain.repository.WalletRepository;
+import com.project.upbit_clone.wallet.domain.vo.ChangeType;
+import com.project.upbit_clone.wallet.domain.vo.LedgerType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
@@ -38,6 +42,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Consumer;
 
 @Service
 public class WorkerWriteService {
@@ -52,6 +57,7 @@ public class WorkerWriteService {
     private final CommandLogRepository commandLogRepository;
     private final EventLogRepository eventLogRepository;
     private final ConsumerOffsetRepository consumerOffsetRepository;
+    private final LedgerWriteService ledgerWriteService;
     private final JsonMapper jsonMapper;
 
     public WorkerWriteService(
@@ -61,6 +67,7 @@ public class WorkerWriteService {
             CommandLogRepository commandLogRepository,
             EventLogRepository eventLogRepository,
             ConsumerOffsetRepository consumerOffsetRepository,
+            LedgerWriteService ledgerWriteService,
             JsonMapper jsonMapper
     ) {
         this.orderRepository = orderRepository;
@@ -69,6 +76,7 @@ public class WorkerWriteService {
         this.commandLogRepository = commandLogRepository;
         this.eventLogRepository = eventLogRepository;
         this.consumerOffsetRepository = consumerOffsetRepository;
+        this.ledgerWriteService = ledgerWriteService;
         this.jsonMapper = jsonMapper;
     }
 
@@ -82,15 +90,24 @@ public class WorkerWriteService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
         Map<String, Order> makerOrdersByKey = loadMakerOrders(result.fills());
         Map<WalletKey, Wallet> walletsByKey = loadWallets(taker, makerOrdersByKey.values());
-        List<Trade> trades = applyFills(taker, result, makerOrdersByKey, walletsByKey);
+        List<PendingTradeLedgerWrite> pendingTradeLedgerWrites = new ArrayList<>();
+        List<PendingOrderLedgerWrite> pendingOrderLedgerWrites = new ArrayList<>();
+        List<Trade> trades = applyFills(
+                taker,
+                result,
+                makerOrdersByKey,
+                walletsByKey,
+                pendingTradeLedgerWrites
+        );
 
-        finalizeTakerState(taker, result, walletsByKey);
+        finalizeTakerState(taker, result, walletsByKey, pendingOrderLedgerWrites, message.commandLogId());
 
         orderRepository.saveAll(uniqueOrders(taker, makerOrdersByKey.values()));
-        walletRepository.saveAll(walletsByKey.values());
+        walletRepository.saveAllAndFlush(walletsByKey.values());
         if (!trades.isEmpty()) {
-            tradeRepository.saveAll(trades);
+            tradeRepository.saveAllAndFlush(trades);
         }
+        ledgerWriteService.saveAll(createTradeLedgers(pendingTradeLedgerWrites, pendingOrderLedgerWrites));
 
         CommandLog commandLogRef = commandLogRepository.getReferenceById(message.commandLogId());
         eventLogRepository.saveAll(createEventLogs(commandLogRef, taker, message, result, trades));
@@ -111,14 +128,29 @@ public class WorkerWriteService {
         Wallet sourceWallet = requireSourceWallet(walletsByKey, targetOrder);
         BigDecimal unlockAmount = remainingLockedAmount(targetOrder);
         String cancelReason = normalizeCancelReason(message.cancelReason());
+        List<PendingOrderLedgerWrite> pendingOrderLedgerWrites = new ArrayList<>();
 
         targetOrder.cancel(cancelReason);
         if (unlockAmount.compareTo(BigDecimal.ZERO) > 0) {
+            LedgerWriteService.BalanceSnapshot beforeUnlock = ledgerWriteService.capture(sourceWallet);
             sourceWallet.unlock(unlockAmount);
+            LedgerWriteService.BalanceSnapshot afterUnlock = ledgerWriteService.capture(sourceWallet);
+            pendingOrderLedgerWrites.add(new PendingOrderLedgerWrite(
+                    sourceWallet,
+                    beforeUnlock,
+                    afterUnlock,
+                    LedgerType.ORDER_UNLOCK,
+                    ChangeType.INCREASE,
+                    unlockAmount,
+                    targetOrder,
+                    cancelReason,
+                    orderUnlockIdempotencyKey(targetOrder, message.commandLogId())
+            ));
         }
 
         orderRepository.save(targetOrder);
-        walletRepository.saveAll(walletsByKey.values());
+        walletRepository.saveAllAndFlush(walletsByKey.values());
+        ledgerWriteService.saveAll(createOrderLedgers(pendingOrderLedgerWrites));
 
         CommandLog commandLogRef = commandLogRepository.getReferenceById(message.commandLogId());
         eventLogRepository.saveAll(createCancelEventLogs(
@@ -181,7 +213,8 @@ public class WorkerWriteService {
             Order taker,
             EngineResult.PlaceResult result,
             Map<String, Order> makerOrdersByKey,
-            Map<WalletKey, Wallet> walletsByKey
+            Map<WalletKey, Wallet> walletsByKey,
+            List<PendingTradeLedgerWrite> pendingTradeLedgerWrites
     ) {
         List<Trade> trades = new ArrayList<>();
 
@@ -195,8 +228,9 @@ public class WorkerWriteService {
             taker.applyExecutedQuantity(fill.executedQuantity(), fill.executedQuoteAmount());
             maker.applyExecutedQuantity(fill.executedQuantity(), fill.executedQuoteAmount());
 
-            applyWalletSettlement(taker, maker, fill, walletsByKey);
-            trades.add(createTrade(taker, maker, fill, index));
+            Trade trade = createTrade(taker, maker, fill, index);
+            applyWalletSettlement(taker, maker, fill, trade, walletsByKey, pendingTradeLedgerWrites);
+            trades.add(trade);
         }
 
         return trades;
@@ -207,7 +241,9 @@ public class WorkerWriteService {
             Order taker,
             Order maker,
             EngineResult.Fill fill,
-            Map<WalletKey, Wallet> walletsByKey
+            Trade trade,
+            Map<WalletKey, Wallet> walletsByKey,
+            List<PendingTradeLedgerWrite> pendingTradeLedgerWrites
     ) {
         Wallet takerSourceWallet = requireSourceWallet(walletsByKey, taker);
         Wallet takerTargetWallet = getOrCreateTargetWallet(walletsByKey, taker);
@@ -215,24 +251,162 @@ public class WorkerWriteService {
         Wallet makerTargetWallet = getOrCreateTargetWallet(walletsByKey, maker);
 
         if (taker.getOrderSide() == OrderSide.BID) {
-            takerSourceWallet.decreaseLocked(fill.executedQuoteAmount());
-            takerTargetWallet.increaseAvailable(fill.executedQuantity());
-            makerSourceWallet.decreaseLocked(fill.executedQuantity());
-            makerTargetWallet.increaseAvailable(fill.executedQuoteAmount());
+            WalletMutationSnapshots takerSourceSnapshots = applyWalletMutation(
+                    takerSourceWallet,
+                    wallet -> wallet.decreaseLocked(fill.executedQuoteAmount())
+            );
+
+            recordTradeLedgerWrite(
+                    pendingTradeLedgerWrites,
+                    takerSourceWallet,
+                    takerSourceSnapshots.before(),
+                    takerSourceSnapshots.after(),
+                    ChangeType.DECREASE,
+                    fill.executedQuoteAmount(),
+                    trade,
+                    "BUYER_QUOTE_LOCKED_DECREASE",
+                    tradeLedgerIdempotencyKey(trade, "buyer-quote-locked")
+            );
+
+            WalletMutationSnapshots takerTargetSnapshots = applyWalletMutation(
+                    takerTargetWallet,
+                    wallet -> wallet.increaseAvailable(fill.executedQuantity())
+            );
+
+            recordTradeLedgerWrite(
+                    pendingTradeLedgerWrites,
+                    takerTargetWallet,
+                    takerTargetSnapshots.before(),
+                    takerTargetSnapshots.after(),
+                    ChangeType.INCREASE,
+                    fill.executedQuantity(),
+                    trade,
+                    "BUYER_BASE_AVAILABLE_INCREASE",
+                    tradeLedgerIdempotencyKey(trade, "buyer-base-available")
+            );
+
+            WalletMutationSnapshots makerSourceSnapshots = applyWalletMutation(
+                    makerSourceWallet,
+                    wallet -> wallet.decreaseLocked(fill.executedQuantity())
+            );
+
+            recordTradeLedgerWrite(
+                    pendingTradeLedgerWrites,
+                    makerSourceWallet,
+                    makerSourceSnapshots.before(),
+                    makerSourceSnapshots.after(),
+                    ChangeType.DECREASE,
+                    fill.executedQuantity(),
+                    trade,
+                    "SELLER_BASE_LOCKED_DECREASE",
+                    tradeLedgerIdempotencyKey(trade, "seller-base-locked")
+            );
+
+            WalletMutationSnapshots makerTargetSnapshots = applyWalletMutation(
+                    makerTargetWallet,
+                    wallet -> wallet.increaseAvailable(fill.executedQuoteAmount())
+            );
+
+            recordTradeLedgerWrite(
+                    pendingTradeLedgerWrites,
+                    makerTargetWallet,
+                    makerTargetSnapshots.before(),
+                    makerTargetSnapshots.after(),
+                    ChangeType.INCREASE,
+                    fill.executedQuoteAmount(),
+                    trade,
+                    "SELLER_QUOTE_AVAILABLE_INCREASE",
+                    tradeLedgerIdempotencyKey(trade, "seller-quote-available")
+            );
             return;
         }
 
-        takerSourceWallet.decreaseLocked(fill.executedQuantity());
-        takerTargetWallet.increaseAvailable(fill.executedQuoteAmount());
-        makerSourceWallet.decreaseLocked(fill.executedQuoteAmount());
-        makerTargetWallet.increaseAvailable(fill.executedQuantity());
+        WalletMutationSnapshots takerSourceSnapshots = applyWalletMutation(
+                takerSourceWallet,
+                wallet -> wallet.decreaseLocked(fill.executedQuantity())
+        );
+
+        recordTradeLedgerWrite(
+                pendingTradeLedgerWrites,
+                takerSourceWallet,
+                takerSourceSnapshots.before(),
+                takerSourceSnapshots.after(),
+                ChangeType.DECREASE,
+                fill.executedQuantity(),
+                trade,
+                "SELLER_BASE_LOCKED_DECREASE",
+                tradeLedgerIdempotencyKey(trade, "seller-base-locked")
+        );
+
+        WalletMutationSnapshots takerTargetSnapshots = applyWalletMutation(
+                takerTargetWallet,
+                wallet -> wallet.increaseAvailable(fill.executedQuoteAmount())
+        );
+
+        recordTradeLedgerWrite(
+                pendingTradeLedgerWrites,
+                takerTargetWallet,
+                takerTargetSnapshots.before(),
+                takerTargetSnapshots.after(),
+                ChangeType.INCREASE,
+                fill.executedQuoteAmount(),
+                trade,
+                "SELLER_QUOTE_AVAILABLE_INCREASE",
+                tradeLedgerIdempotencyKey(trade, "seller-quote-available")
+        );
+
+        WalletMutationSnapshots makerSourceSnapshots = applyWalletMutation(
+                makerSourceWallet,
+                wallet -> wallet.decreaseLocked(fill.executedQuoteAmount())
+        );
+
+        recordTradeLedgerWrite(
+                pendingTradeLedgerWrites,
+                makerSourceWallet,
+                makerSourceSnapshots.before(),
+                makerSourceSnapshots.after(),
+                ChangeType.DECREASE,
+                fill.executedQuoteAmount(),
+                trade,
+                "BUYER_QUOTE_LOCKED_DECREASE",
+                tradeLedgerIdempotencyKey(trade, "buyer-quote-locked")
+        );
+
+        WalletMutationSnapshots makerTargetSnapshots = applyWalletMutation(
+                makerTargetWallet,
+                wallet -> wallet.increaseAvailable(fill.executedQuantity())
+        );
+
+        recordTradeLedgerWrite(
+                pendingTradeLedgerWrites,
+                makerTargetWallet,
+                makerTargetSnapshots.before(),
+                makerTargetSnapshots.after(),
+                ChangeType.INCREASE,
+                fill.executedQuantity(),
+                trade,
+                "BUYER_BASE_AVAILABLE_INCREASE",
+                tradeLedgerIdempotencyKey(trade, "buyer-base-available")
+        );
+    }
+
+    private WalletMutationSnapshots applyWalletMutation(
+            Wallet wallet,
+            Consumer<Wallet> mutation
+    ) {
+        LedgerWriteService.BalanceSnapshot before = ledgerWriteService.capture(wallet);
+        mutation.accept(wallet);
+        LedgerWriteService.BalanceSnapshot after = ledgerWriteService.capture(wallet);
+        return new WalletMutationSnapshots(before, after);
     }
 
     // 주문 상태 최종 수정.
     private void finalizeTakerState(
             Order taker,
             EngineResult.PlaceResult result,
-            Map<WalletKey, Wallet> walletsByKey
+            Map<WalletKey, Wallet> walletsByKey,
+            List<PendingOrderLedgerWrite> pendingOrderLedgerWrites,
+            Long commandLogId
     ) {
         Wallet takerSourceWallet = requireSourceWallet(walletsByKey, taker);
 
@@ -250,7 +424,20 @@ public class WorkerWriteService {
         }
 
         if (result.unlockAmount().compareTo(BigDecimal.ZERO) > 0) {
+            LedgerWriteService.BalanceSnapshot beforeUnlock = ledgerWriteService.capture(takerSourceWallet);
             takerSourceWallet.unlock(result.unlockAmount());
+            LedgerWriteService.BalanceSnapshot afterUnlock = ledgerWriteService.capture(takerSourceWallet);
+            pendingOrderLedgerWrites.add(new PendingOrderLedgerWrite(
+                    takerSourceWallet,
+                    beforeUnlock,
+                    afterUnlock,
+                    LedgerType.ORDER_UNLOCK,
+                    ChangeType.INCREASE,
+                    result.unlockAmount(),
+                    taker,
+                    unlockReason(result),
+                    orderUnlockIdempotencyKey(taker, commandLogId)
+            ));
         }
     }
 
@@ -278,9 +465,91 @@ public class WorkerWriteService {
                 fill.price(),
                 fill.executedQuantity(),
                 fill.executedQuoteAmount(),
+                // TODO: fee rate 설정 필요
                 BigDecimal.ZERO,
                 BigDecimal.ZERO,
                 BigDecimal.ZERO
+        ));
+    }
+
+    private List<Ledger> createTradeLedgers(
+            List<PendingTradeLedgerWrite> pendingTradeLedgerWrites,
+            List<PendingOrderLedgerWrite> pendingOrderLedgerWrites
+    ) {
+        List<Ledger> ledgers = new ArrayList<>();
+        ledgers.addAll(createTradeLedgers(pendingTradeLedgerWrites));
+        ledgers.addAll(createOrderLedgers(pendingOrderLedgerWrites));
+        return ledgers;
+    }
+
+    private List<Ledger> createTradeLedgers(List<PendingTradeLedgerWrite> pendingTradeLedgerWrites) {
+        List<Ledger> ledgers = new ArrayList<>();
+        for (PendingTradeLedgerWrite pending : pendingTradeLedgerWrites) {
+            ledgers.add(ledgerWriteService.createTradeLedger(
+                    new LedgerWriteService.TradeLedgerSpec(
+                            pending.wallet(),
+                            pending.beforeSnapshot(),
+                            pending.afterSnapshot(),
+                            new LedgerWriteService.LedgerMutation(
+                                    LedgerType.TRADE,
+                                    pending.changeType(),
+                                    pending.amount()
+                            ),
+                            pending.trade(),
+                            new LedgerWriteService.LedgerMeta(
+                                    pending.description(),
+                                    pending.idempotencyKey()
+                            )
+                    )
+            ));
+        }
+        return ledgers;
+    }
+
+    private List<Ledger> createOrderLedgers(List<PendingOrderLedgerWrite> pendingOrderLedgerWrites) {
+        List<Ledger> ledgers = new ArrayList<>();
+        for (PendingOrderLedgerWrite pending : pendingOrderLedgerWrites) {
+            ledgers.add(ledgerWriteService.createOrderLedger(
+                    new LedgerWriteService.OrderLedgerSpec(
+                            pending.wallet(),
+                            pending.beforeSnapshot(),
+                            pending.afterSnapshot(),
+                            new LedgerWriteService.LedgerMutation(
+                                    pending.ledgerType(),
+                                    pending.changeType(),
+                                    pending.amount()
+                            ),
+                            pending.order(),
+                            new LedgerWriteService.LedgerMeta(
+                                    pending.description(),
+                                    pending.idempotencyKey()
+                            )
+                    )
+            ));
+        }
+        return ledgers;
+    }
+
+    private void recordTradeLedgerWrite(
+            List<PendingTradeLedgerWrite> pendingTradeLedgerWrites,
+            Wallet wallet,
+            LedgerWriteService.BalanceSnapshot beforeSnapshot,
+            LedgerWriteService.BalanceSnapshot afterSnapshot,
+            ChangeType changeType,
+            BigDecimal amount,
+            Trade trade,
+            String description,
+            String idempotencyKey
+    ) {
+        pendingTradeLedgerWrites.add(new PendingTradeLedgerWrite(
+                wallet,
+                beforeSnapshot,
+                afterSnapshot,
+                changeType,
+                amount,
+                trade,
+                description,
+                idempotencyKey
         ));
     }
 
@@ -570,6 +839,19 @@ public class WorkerWriteService {
         return (cancelReason == null || cancelReason.isBlank()) ? "Order Canceled" : cancelReason.strip();
     }
 
+    private String unlockReason(EngineResult.PlaceResult result) {
+        String reason = resolveCancelReason(result.cancelReason());
+        return reason == null ? "MATCH_REMAINDER_UNLOCK" : reason;
+    }
+
+    private String orderUnlockIdempotencyKey(Order order, Long commandLogId) {
+        return "order:" + order.getOrderKey() + ":unlock:" + commandLogId;
+    }
+
+    private String tradeLedgerIdempotencyKey(Trade trade, String leg) {
+        return "trade:" + trade.getTradeKey() + ":" + leg;
+    }
+
     private BigDecimal remainingLockedAmount(Order order) {
         if (order.getOrderSide() == OrderSide.BID) {
             if (order.getOrderType() == OrderType.MARKET) {
@@ -626,5 +908,36 @@ public class WorkerWriteService {
         private static WalletKey of(Long userId, Long assetId) {
             return new WalletKey(userId, assetId);
         }
+    }
+
+    private record WalletMutationSnapshots(
+            LedgerWriteService.BalanceSnapshot before,
+            LedgerWriteService.BalanceSnapshot after
+    ) {
+    }
+
+    private record PendingTradeLedgerWrite(
+            Wallet wallet,
+            LedgerWriteService.BalanceSnapshot beforeSnapshot,
+            LedgerWriteService.BalanceSnapshot afterSnapshot,
+            ChangeType changeType,
+            BigDecimal amount,
+            Trade trade,
+            String description,
+            String idempotencyKey
+    ) {
+    }
+
+    private record PendingOrderLedgerWrite(
+            Wallet wallet,
+            LedgerWriteService.BalanceSnapshot beforeSnapshot,
+            LedgerWriteService.BalanceSnapshot afterSnapshot,
+            LedgerType ledgerType,
+            ChangeType changeType,
+            BigDecimal amount,
+            Order order,
+            String description,
+            String idempotencyKey
+    ) {
     }
 }

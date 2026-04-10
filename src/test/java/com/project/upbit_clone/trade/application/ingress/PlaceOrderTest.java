@@ -94,7 +94,7 @@ class PlaceOrderTest {
                 .thenAnswer(invocation -> {
                     OrderWriteService.AcceptedPlaceCommand accepted = invocation.getArgument(0);
                     setCommandLogId(accepted.commandLog(), 100L);
-                    return new OrderWriteService.AcceptedPlaceWrite(accepted.commandLog(), null, null);
+                    return new OrderWriteService.AcceptedPlaceWrite(accepted.commandLog(), null, null, null);
                 });
 
         // when
@@ -138,7 +138,7 @@ class PlaceOrderTest {
                 .thenAnswer(invocation -> {
                     OrderWriteService.AcceptedPlaceCommand accepted = invocation.getArgument(0);
                     setCommandLogId(accepted.commandLog(), 100L);
-                    return new OrderWriteService.AcceptedPlaceWrite(accepted.commandLog(), null, null);
+                    return new OrderWriteService.AcceptedPlaceWrite(accepted.commandLog(), null, null, null);
                 });
 
         // when
@@ -180,7 +180,7 @@ class PlaceOrderTest {
                 .thenAnswer(invocation -> {
                     OrderWriteService.AcceptedPlaceCommand accepted = invocation.getArgument(0);
                     setCommandLogId(accepted.commandLog(), 100L);
-                    return new OrderWriteService.AcceptedPlaceWrite(accepted.commandLog(), null, null);
+                    return new OrderWriteService.AcceptedPlaceWrite(accepted.commandLog(), null, null, null);
                 });
 
         // when
@@ -213,7 +213,7 @@ class PlaceOrderTest {
                 .thenAnswer(invocation -> {
                     OrderWriteService.AcceptedPlaceCommand accepted = invocation.getArgument(0);
                     setCommandLogId(accepted.commandLog(), 100L);
-                    return new OrderWriteService.AcceptedPlaceWrite(accepted.commandLog(), null, null);
+                    return new OrderWriteService.AcceptedPlaceWrite(accepted.commandLog(), null, null, null);
                 });
         doThrow(new RuntimeException("dispatch failed"))
                 .when(commandDispatcher).dispatch(any(CommandMessage.class));
