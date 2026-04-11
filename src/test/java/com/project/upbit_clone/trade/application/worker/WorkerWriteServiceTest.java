@@ -6,6 +6,7 @@ import com.project.upbit_clone.trade.application.dispatch.CommandMessage;
 import com.project.upbit_clone.trade.application.engine.EngineResult;
 import com.project.upbit_clone.trade.application.engine.orderbook.InMemoryOrderBook;
 import com.project.upbit_clone.trade.application.engine.orderbook.PriceLevel;
+import com.project.upbit_clone.trade.application.service.LedgerWriteService;
 import com.project.upbit_clone.trade.domain.model.Market;
 import com.project.upbit_clone.trade.domain.model.Order;
 import com.project.upbit_clone.trade.domain.model.Trade;
@@ -24,8 +25,11 @@ import com.project.upbit_clone.trade.infrastructure.persistence.repository.Event
 import com.project.upbit_clone.trade.infrastructure.persistence.vo.CommandType;
 import com.project.upbit_clone.trade.infrastructure.persistence.vo.EventType;
 import com.project.upbit_clone.user.domain.model.User;
+import com.project.upbit_clone.wallet.domain.model.Ledger;
 import com.project.upbit_clone.wallet.domain.model.Wallet;
+import com.project.upbit_clone.wallet.domain.repository.LedgerRepository;
 import com.project.upbit_clone.wallet.domain.repository.WalletRepository;
+import com.project.upbit_clone.wallet.domain.vo.LedgerType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -42,6 +46,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -69,6 +74,9 @@ class WorkerWriteServiceTest {
     @Mock
     private ConsumerOffsetRepository consumerOffsetRepository;
 
+    @Mock
+    private LedgerRepository ledgerRepository;
+
     @Captor
     private ArgumentCaptor<Iterable<Wallet>> walletCaptor;
 
@@ -81,6 +89,9 @@ class WorkerWriteServiceTest {
     @Captor
     private ArgumentCaptor<ConsumerOffset> offsetCaptor;
 
+    @Captor
+    private ArgumentCaptor<Iterable<Ledger>> ledgerCaptor;
+
     private WorkerWriteService workerWriteService;
 
     @BeforeEach
@@ -92,6 +103,7 @@ class WorkerWriteServiceTest {
                 commandLogRepository,
                 eventLogRepository,
                 consumerOffsetRepository,
+                new LedgerWriteService(ledgerRepository),
                 JsonMapper.builder().build()
         );
     }
@@ -139,7 +151,8 @@ class WorkerWriteServiceTest {
         assertThat(takerQuoteWallet.getLockedBalance()).isEqualByComparingTo("10000");
         assertThat(takerQuoteWallet.getAvailableBalance()).isEqualByComparingTo("0");
 
-        verify(tradeRepository, never()).saveAll(any());
+        verify(tradeRepository, never()).saveAllAndFlush(any());
+        verify(ledgerRepository, never()).saveAll(any());
 
         verify(eventLogRepository).saveAll(eventCaptor.capture());
         assertThat(eventCaptor.getValue())
@@ -208,10 +221,10 @@ class WorkerWriteServiceTest {
         assertThat(takerQuoteWallet.getLockedBalance()).isEqualByComparingTo("0");
         assertThat(makerBaseWallet.getLockedBalance()).isEqualByComparingTo("0");
 
-        verify(walletRepository).saveAll(walletCaptor.capture());
+        verify(walletRepository).saveAllAndFlush(walletCaptor.capture());
         assertThat(walletCaptor.getValue()).hasSize(4);
 
-        verify(tradeRepository).saveAll(tradeCaptor.capture());
+        verify(tradeRepository).saveAllAndFlush(tradeCaptor.capture());
         assertThat(tradeCaptor.getValue()).hasSize(1);
         Trade trade = tradeCaptor.getValue().iterator().next();
         assertThat(trade.getTradeKey()).isEqualTo("taker-order-trade-1");
@@ -221,6 +234,32 @@ class WorkerWriteServiceTest {
         assertThat(eventCaptor.getValue())
                 .extracting(EventLog::getEventType)
                 .containsExactly(EventType.TRADE_EXECUTED, EventType.ORDER_FILLED, EventType.FUNDS_UNLOCKED);
+
+        verify(ledgerRepository).saveAll(ledgerCaptor.capture());
+        assertThat(ledgerCaptor.getValue()).hasSize(5);
+        assertThat(ledgerCaptor.getValue())
+                .extracting(Ledger::getLedgerType)
+                .containsExactly(
+                        LedgerType.TRADE,
+                        LedgerType.TRADE,
+                        LedgerType.TRADE,
+                        LedgerType.TRADE,
+                        LedgerType.ORDER_UNLOCK
+                );
+        assertThat(ledgerCaptor.getValue())
+                .extracting(
+                        Ledger::getAvailableBefore,
+                        Ledger::getAvailableAfter,
+                        Ledger::getLockedBefore,
+                        Ledger::getLockedAfter
+                )
+                .containsExactly(
+                        tuple(new BigDecimal("0"), new BigDecimal("0"), new BigDecimal("10000"), new BigDecimal("1000")),
+                        tuple(new BigDecimal("0"), new BigDecimal("1"), new BigDecimal("0"), new BigDecimal("0")),
+                        tuple(new BigDecimal("0"), new BigDecimal("0"), new BigDecimal("1"), new BigDecimal("0")),
+                        tuple(new BigDecimal("0"), new BigDecimal("9000"), new BigDecimal("0"), new BigDecimal("0")),
+                        tuple(new BigDecimal("0"), new BigDecimal("1000"), new BigDecimal("1000"), new BigDecimal("0"))
+                );
     }
 
     @Test
@@ -261,12 +300,16 @@ class WorkerWriteServiceTest {
         assertThat(quoteWallet.getAvailableBalance()).isEqualByComparingTo("10000");
         assertThat(quoteWallet.getLockedBalance()).isEqualByComparingTo("0");
 
-        verify(tradeRepository, never()).saveAll(any());
+        verify(tradeRepository, never()).saveAllAndFlush(any());
 
         verify(eventLogRepository).saveAll(eventCaptor.capture());
         assertThat(eventCaptor.getValue())
                 .extracting(EventLog::getEventType)
                 .containsExactly(EventType.ORDER_CANCELED, EventType.FUNDS_UNLOCKED, EventType.ORDER_BOOK_DELTA);
+
+        verify(ledgerRepository).saveAll(ledgerCaptor.capture());
+        assertThat(ledgerCaptor.getValue()).hasSize(1);
+        assertThat(ledgerCaptor.getValue().iterator().next().getLedgerType()).isEqualTo(LedgerType.ORDER_UNLOCK);
 
         verify(consumerOffsetRepository).save(offsetCaptor.capture());
         assertThat(offsetCaptor.getValue().getLastOffset()).isEqualTo(21L);
@@ -306,6 +349,10 @@ class WorkerWriteServiceTest {
         assertThat(eventCaptor.getValue())
                 .extracting(EventLog::getEventType)
                 .containsExactly(EventType.ORDER_CANCELED, EventType.FUNDS_UNLOCKED);
+
+        verify(ledgerRepository).saveAll(ledgerCaptor.capture());
+        assertThat(ledgerCaptor.getValue()).hasSize(1);
+        assertThat(ledgerCaptor.getValue().iterator().next().getLedgerType()).isEqualTo(LedgerType.ORDER_UNLOCK);
     }
 
     @Test

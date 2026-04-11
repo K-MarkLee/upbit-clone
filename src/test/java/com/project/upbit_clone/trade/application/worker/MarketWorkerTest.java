@@ -319,7 +319,7 @@ class MarketWorkerTest {
     }
 
     @Test
-    @DisplayName("Negative : baseAssetScale은 0 이상이어야 한다.")
+    @DisplayName("Negative : baseAssetScale은 0 이상 8 이하여야 한다.")
     void reject_place_order_with_negative_base_asset_scale() {
         // given
         CommandMessage.Place message = new CommandMessage.Place(
@@ -341,7 +341,7 @@ class MarketWorkerTest {
         // when & then
         assertThatThrownBy(() -> marketWorker.enqueue(message))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("baseAssetScale은 0 이상이어야 합니다.");
+                .hasMessage("baseAssetScale은 0 이상 8 이하여야 합니다.");
     }
 
     @Test

@@ -335,7 +335,7 @@ public class Order extends BaseEntity {
     }
 
     private static int resolveAssetScale(Byte decimals) {
-        if (decimals == null || decimals < 0) {
+        if (decimals == null || decimals < 0 || decimals > 8) {
             throw new BusinessException(ErrorCode.INVALID_ASSET_DECIMALS);
         }
         return decimals;
@@ -371,7 +371,7 @@ public class Order extends BaseEntity {
             throw new BusinessException(ErrorCode.INVALID_TRADE_INPUT);
         }
 
-        // TODO: Reject cumulative overfill/overspend here once the engine/apply contract is finalized.
+        // TODO: 누적 과체결 / 과소비 막는 로직 필요.
         this.executedQuantity = this.executedQuantity.add(executedQuantity);
         this.executedQuoteAmount = this.executedQuoteAmount.add(executedQuoteAmount);
 

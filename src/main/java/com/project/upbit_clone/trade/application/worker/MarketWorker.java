@@ -174,8 +174,8 @@ public class MarketWorker {
                 || message.orderType() == null) {
             throw new IllegalArgumentException("place message 필수값이 누락되어 있습니다.");
         }
-        if (message.baseAssetScale() < 0) {
-            throw new IllegalArgumentException("baseAssetScale은 0 이상이어야 합니다.");
+        if (message.baseAssetScale() < 0 || message.baseAssetScale() > 8) {
+            throw new IllegalArgumentException("baseAssetScale은 0 이상 8 이하여야 합니다.");
         }
 
         switch (message.orderType()) {
