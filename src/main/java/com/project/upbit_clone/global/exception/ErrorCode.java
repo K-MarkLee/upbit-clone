@@ -17,6 +17,7 @@ public enum ErrorCode {
 
     // event log
     INVALID_EVENT_LOG_INPUT("K01", "유효하지 않은 이벤트 로그 입력입니다.", HttpStatus.BAD_REQUEST),
+    INVALID_EVENT_PAYLOAD("K01", "유효하지 않은 이벤트 payload 입니다.", HttpStatus.BAD_REQUEST),
 
     // consumer offset
     INVALID_CONSUMER_OFFSET_INPUT("J01", "유효하지 않은 소비자 오프셋 입력입니다.", HttpStatus.BAD_REQUEST),

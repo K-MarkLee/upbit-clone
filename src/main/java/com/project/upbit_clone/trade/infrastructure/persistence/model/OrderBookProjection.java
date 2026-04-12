@@ -49,6 +49,12 @@ public class OrderBookProjection {
         this.orderCount = validateOrderCount(orderCount);
     }
 
+    public void update(BigDecimal totalQty, Integer orderCount) {
+        validateCreateInput(this.id, totalQty, orderCount);
+        this.totalQty = new NonNegativeAmount(totalQty).value();
+        this.orderCount = validateOrderCount(orderCount);
+    }
+
     private static int validateOrderCount(Integer value) {
         if (value == null || value < 0) {
             throw new BusinessException(ErrorCode.NEGATIVE_ORDER_COUNT_NOT_ALLOWED);

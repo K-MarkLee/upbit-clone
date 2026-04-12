@@ -2,6 +2,7 @@ package com.project.upbit_clone.trade.application.worker;
 
 import com.project.upbit_clone.trade.application.dispatch.CommandMessage;
 import com.project.upbit_clone.trade.application.engine.MatchingEngineCore;
+import com.project.upbit_clone.trade.application.projector.EventProjector;
 import jakarta.annotation.PreDestroy;
 import org.springframework.stereotype.Component;
 
@@ -13,11 +14,17 @@ public class MarketWorkerManager {
     private final ConcurrentHashMap<Long, MarketWorker> workers = new ConcurrentHashMap<>();
     private final MatchingEngineCore matchingEngineCore;
     private final WorkerWriteService workerWriteService;
+    private final EventProjector eventProjector;
     private volatile boolean accepting = true;
 
-    public MarketWorkerManager(MatchingEngineCore matchingEngineCore, WorkerWriteService workerWriteService) {
+    public MarketWorkerManager(
+            MatchingEngineCore matchingEngineCore,
+            WorkerWriteService workerWriteService,
+            EventProjector eventProjector
+    ) {
         this.matchingEngineCore = matchingEngineCore;
         this.workerWriteService = workerWriteService;
+        this.eventProjector = eventProjector;
     }
 
     public synchronized void submit(CommandMessage message) {
@@ -45,7 +52,7 @@ public class MarketWorkerManager {
     }
 
     MarketWorker createWorker(Long marketId) {
-        return new MarketWorker(marketId, matchingEngineCore, workerWriteService);
+        return new MarketWorker(marketId, matchingEngineCore, workerWriteService, eventProjector);
     }
 
     MarketWorker workerFor(Long marketId) {

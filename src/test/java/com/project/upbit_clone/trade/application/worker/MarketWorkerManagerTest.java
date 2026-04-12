@@ -2,6 +2,7 @@ package com.project.upbit_clone.trade.application.worker;
 
 import com.project.upbit_clone.trade.application.dispatch.CommandMessage;
 import com.project.upbit_clone.trade.application.engine.MatchingEngineCore;
+import com.project.upbit_clone.trade.application.projector.EventProjector;
 import com.project.upbit_clone.trade.domain.vo.OrderSide;
 import com.project.upbit_clone.trade.domain.vo.OrderType;
 import com.project.upbit_clone.trade.domain.vo.TimeInForce;
@@ -26,6 +27,7 @@ class MarketWorkerManagerTest {
 
     private MarketWorkerManager marketWorkerManager;
     private WorkerWriteService workerWriteService;
+    private EventProjector eventProjector;
     private CommandMessage.Place btcPlaceMessage;
     private CommandMessage.Cancel btcCancelMessage;
     private CommandMessage.Place ethPlaceMessage;
@@ -33,7 +35,8 @@ class MarketWorkerManagerTest {
     @BeforeEach
     void setUp() {
         workerWriteService = Mockito.mock(WorkerWriteService.class);
-        marketWorkerManager = new MarketWorkerManager(new MatchingEngineCore(), workerWriteService);
+        eventProjector = Mockito.mock(EventProjector.class);
+        marketWorkerManager = new MarketWorkerManager(new MatchingEngineCore(), workerWriteService, eventProjector);
         btcPlaceMessage = new CommandMessage.Place(
                 1L,
                 10L,
@@ -157,7 +160,7 @@ class MarketWorkerManagerTest {
     void submit_and_shutdown_all_are_serialized() throws InterruptedException {
         // given
         BlockingCreateMarketWorkerManager blockingManager =
-                new BlockingCreateMarketWorkerManager(new MatchingEngineCore(), workerWriteService);
+                new BlockingCreateMarketWorkerManager(new MatchingEngineCore(), workerWriteService, eventProjector);
         marketWorkerManager = blockingManager;
         CountDownLatch submitCompleted = new CountDownLatch(1);
         CountDownLatch shutdownCompleted = new CountDownLatch(1);
@@ -199,23 +202,26 @@ class MarketWorkerManagerTest {
     private static final class BlockingCreateMarketWorkerManager extends MarketWorkerManager {
         private final MatchingEngineCore matchingEngineCore;
         private final WorkerWriteService workerWriteService;
+        private final EventProjector eventProjector;
         private final CountDownLatch creationStarted = new CountDownLatch(1);
         private final CountDownLatch allowCreation = new CountDownLatch(1);
 
         private BlockingCreateMarketWorkerManager(
                 MatchingEngineCore matchingEngineCore,
-                WorkerWriteService workerWriteService
+                WorkerWriteService workerWriteService,
+                EventProjector eventProjector
         ) {
-            super(matchingEngineCore, workerWriteService);
+            super(matchingEngineCore, workerWriteService, eventProjector);
             this.matchingEngineCore = matchingEngineCore;
             this.workerWriteService = workerWriteService;
+            this.eventProjector = eventProjector;
         }
 
         @Override
         MarketWorker createWorker(Long marketId) {
             creationStarted.countDown();
             awaitAllowCreation();
-            return new MarketWorker(marketId, matchingEngineCore, workerWriteService);
+            return new MarketWorker(marketId, matchingEngineCore, workerWriteService, eventProjector);
         }
 
         private boolean awaitCreationStarted() throws InterruptedException {

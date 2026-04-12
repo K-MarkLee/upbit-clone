@@ -4,6 +4,7 @@ import com.project.upbit_clone.trade.application.dispatch.CommandMessage;
 import com.project.upbit_clone.trade.application.engine.EngineResult;
 import com.project.upbit_clone.trade.application.engine.MatchingEngineCore;
 import com.project.upbit_clone.trade.application.engine.orderbook.InMemoryOrderBook;
+import com.project.upbit_clone.trade.application.projector.EventProjector;
 import com.project.upbit_clone.trade.domain.vo.TimeInForce;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,15 +22,22 @@ public class MarketWorker {
     private final MatchingEngineCore matchingEngineCore;
     private final InMemoryOrderBook orderBook;
     private final WorkerWriteService workerWriteService;
+    private final EventProjector eventProjector;
     private final BlockingQueue<CommandMessage> mailbox = new LinkedBlockingQueue<>();
     private volatile String marketCode;
     private volatile boolean running;
     private Thread workerThread;
 
-    public MarketWorker(Long marketId, MatchingEngineCore matchingEngineCore, WorkerWriteService workerWriteService) {
+    public MarketWorker(
+            Long marketId,
+            MatchingEngineCore matchingEngineCore,
+            WorkerWriteService workerWriteService,
+            EventProjector eventProjector
+    ) {
         this.marketId = Objects.requireNonNull(marketId, "marketId는 null값일 수 없습니다.");
         this.matchingEngineCore = Objects.requireNonNull(matchingEngineCore, "matchingEngineCore는 null값일 수 없습니다.");
         this.workerWriteService = Objects.requireNonNull(workerWriteService, "workerWriteService는 null값일 수 없습니다.");
+        this.eventProjector = Objects.requireNonNull(eventProjector, "eventProjector는 null값일 수 없습니다.");
         this.orderBook = new InMemoryOrderBook();
     }
 
@@ -115,6 +123,7 @@ public class MarketWorker {
                 result.fills().size()
         );
         workerWriteService.writePlace(message, result);
+        projectAvailableEvents();
     }
 
     // 취소처리
@@ -129,6 +138,20 @@ public class MarketWorker {
                 removedLevelDelta != null
         );
         workerWriteService.writeCancel(message, removedLevelDelta);
+        projectAvailableEvents();
+    }
+
+    private void projectAvailableEvents() {
+        try {
+            eventProjector.projectAvailableEvents(marketId);
+        } catch (RuntimeException exception) {
+            log.error(
+                    "EventProjector 실행에 실패했습니다. marketId={}, marketCode={}",
+                    marketId,
+                    marketCode,
+                    exception
+            );
+        }
     }
 
     private synchronized void bindMarketCode(String marketCode) {
