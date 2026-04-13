@@ -10,5 +10,5 @@ import java.util.List;
 @Repository
 public interface EventLogRepository extends JpaRepository<EventLog, Long> {
 
-    List<EventLog> findByMarketIdAndIdGreaterThanOrderByIdAsc(Long marketId, Long eventLogId);
+    List<EventLog> findTop100ByMarketIdAndIdGreaterThanOrderByIdAsc(Long marketId, Long eventLogId);
 }

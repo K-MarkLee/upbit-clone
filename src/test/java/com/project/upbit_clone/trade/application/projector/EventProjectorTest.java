@@ -60,11 +60,15 @@ class EventProjectorTest {
 
     @BeforeEach
     void setUp() {
-        eventProjector = new EventProjector(
-                eventLogRepository,
+        EventProjectionWriteService eventProjectionWriteService = new EventProjectionWriteService(
                 orderBookProjectionRepository,
                 consumerOffsetRepository,
                 JsonMapper.builder().build()
+        );
+        eventProjector = new EventProjector(
+                eventLogRepository,
+                consumerOffsetRepository,
+                eventProjectionWriteService
         );
     }
 
@@ -82,7 +86,7 @@ class EventProjectorTest {
         OrderBookProjectionId projectionId = new OrderBookProjectionId(100L, OrderSide.BID, new BigDecimal("1000"));
 
         when(consumerOffsetRepository.findById(offsetId())).thenReturn(Optional.empty());
-        when(eventLogRepository.findByMarketIdAndIdGreaterThanOrderByIdAsc(100L, 0L))
+        when(eventLogRepository.findTop100ByMarketIdAndIdGreaterThanOrderByIdAsc(100L, 0L))
                 .thenReturn(List.of(eventLog));
         when(orderBookProjectionRepository.findById(projectionId)).thenReturn(Optional.empty());
 
@@ -115,7 +119,7 @@ class EventProjectorTest {
         OrderBookProjection projection = OrderBookProjection.create(projectionId, BigDecimal.ONE, 1);
 
         when(consumerOffsetRepository.findById(offsetId())).thenReturn(Optional.empty());
-        when(eventLogRepository.findByMarketIdAndIdGreaterThanOrderByIdAsc(100L, 0L))
+        when(eventLogRepository.findTop100ByMarketIdAndIdGreaterThanOrderByIdAsc(100L, 0L))
                 .thenReturn(List.of(eventLog));
         when(orderBookProjectionRepository.findById(projectionId)).thenReturn(Optional.of(projection));
 
@@ -141,7 +145,7 @@ class EventProjectorTest {
 
         when(consumerOffsetRepository.findById(offsetId()))
                 .thenReturn(Optional.of(ConsumerOffset.create(offsetId(), 9L)));
-        when(eventLogRepository.findByMarketIdAndIdGreaterThanOrderByIdAsc(100L, 9L))
+        when(eventLogRepository.findTop100ByMarketIdAndIdGreaterThanOrderByIdAsc(100L, 9L))
                 .thenReturn(List.of(eventLog));
 
         // when
@@ -167,7 +171,7 @@ class EventProjectorTest {
         );
 
         when(consumerOffsetRepository.findById(offsetId())).thenReturn(Optional.empty());
-        when(eventLogRepository.findByMarketIdAndIdGreaterThanOrderByIdAsc(100L, 0L))
+        when(eventLogRepository.findTop100ByMarketIdAndIdGreaterThanOrderByIdAsc(100L, 0L))
                 .thenReturn(List.of(eventLog));
 
         // when
@@ -183,7 +187,50 @@ class EventProjectorTest {
         assertThat(blockedException.getErrorCode()).isEqualTo(ErrorCode.PROJECTOR_BLOCKED);
         verify(consumerOffsetRepository, never()).save(any(ConsumerOffset.class));
         verify(orderBookProjectionRepository, never()).save(any(OrderBookProjection.class));
-        verify(eventLogRepository).findByMarketIdAndIdGreaterThanOrderByIdAsc(100L, 0L);
+        verify(eventLogRepository).findTop100ByMarketIdAndIdGreaterThanOrderByIdAsc(100L, 0L);
+    }
+
+    @Test
+    @DisplayName("Happy : batch 중간 이벤트가 실패해도 이전 이벤트의 projection과 offset은 커밋한다.")
+    void project_invalid_later_event_keeps_previous_event_progress() {
+        // given
+        EventLog validEvent = eventLog(
+                14L,
+                EventType.ORDER_BOOK_DELTA,
+                """
+                        {"reason":"RESTING_ORDER_ADDED","side":"BID","price":"1000","beforeTotalQty":"0","beforeOrderCount":0,"afterTotalQty":"2.5","afterOrderCount":3}
+                        """
+        );
+        EventLog invalidEvent = eventLog(
+                15L,
+                EventType.ORDER_BOOK_DELTA,
+                """
+                        {"reason":"MATCH_EXECUTED","side":"ASK","price":"not-a-number","beforeTotalQty":"1","beforeOrderCount":1,"afterTotalQty":"0","afterOrderCount":0}
+                        """
+        );
+        OrderBookProjectionId projectionId = new OrderBookProjectionId(100L, OrderSide.BID, new BigDecimal("1000"));
+
+        when(consumerOffsetRepository.findById(offsetId())).thenReturn(Optional.empty());
+        when(eventLogRepository.findTop100ByMarketIdAndIdGreaterThanOrderByIdAsc(100L, 0L))
+                .thenReturn(List.of(validEvent, invalidEvent));
+        when(orderBookProjectionRepository.findById(projectionId)).thenReturn(Optional.empty());
+
+        // when
+        Throwable throwable = catchThrowable(() -> eventProjector.projectAvailableEvents(100L));
+
+        // then
+        assertThat(throwable).isInstanceOf(BusinessException.class);
+        BusinessException exception = (BusinessException) throwable;
+        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_EVENT_PAYLOAD);
+
+        verify(orderBookProjectionRepository).save(projectionCaptor.capture());
+        assertThat(projectionCaptor.getValue().getId()).isEqualTo(projectionId);
+        assertThat(projectionCaptor.getValue().getTotalQty()).isEqualByComparingTo("2.5");
+        assertThat(projectionCaptor.getValue().getOrderCount()).isEqualTo(3);
+
+        verify(consumerOffsetRepository).save(offsetCaptor.capture());
+        assertThat(offsetCaptor.getValue().getId()).isEqualTo(offsetId());
+        assertThat(offsetCaptor.getValue().getLastOffset()).isEqualTo(14L);
     }
 
     private ConsumerOffsetId offsetId() {
