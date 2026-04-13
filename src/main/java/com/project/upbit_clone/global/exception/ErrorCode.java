@@ -8,6 +8,9 @@ import org.springframework.http.HttpStatus;
 @Getter
 @AllArgsConstructor(access = AccessLevel.PROTECTED)
 public enum ErrorCode {
+    // event projector
+    PROJECTOR_BLOCKED("O01", "해당 market의 프로젝터는 blocked 상태입니다.", HttpStatus.CONFLICT),
+
     // in memory order book
     INVALID_ORDER_BOOK_INPUT("M01", "유효하지 않은 오더북 입력입니다. ", HttpStatus.BAD_REQUEST),
 

@@ -1,5 +1,7 @@
 package com.project.upbit_clone.trade.application.projector;
 
+import com.project.upbit_clone.global.exception.BusinessException;
+import com.project.upbit_clone.global.exception.ErrorCode;
 import com.project.upbit_clone.trade.domain.vo.OrderSide;
 import com.project.upbit_clone.trade.infrastructure.persistence.model.CommandLog;
 import com.project.upbit_clone.trade.infrastructure.persistence.model.ConsumerOffset;
@@ -29,6 +31,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -149,6 +152,38 @@ class EventProjectorTest {
         verify(orderBookProjectionRepository, never()).save(any(OrderBookProjection.class));
         verify(consumerOffsetRepository).save(offsetCaptor.capture());
         assertThat(offsetCaptor.getValue().getLastOffset()).isEqualTo(12L);
+    }
+
+    @Test
+    @DisplayName("Happy : ORDER_BOOK_DELTA payload가 유효하지 않으면 해당 market projector를 blocked 처리한다.")
+    void project_invalid_order_book_delta_payload_blocks_market_projector() {
+        // given
+        EventLog eventLog = eventLog(
+                13L,
+                EventType.ORDER_BOOK_DELTA,
+                """
+                        {"reason":"MATCH_EXECUTED","side":"ASK","price":"not-a-number","beforeTotalQty":"1","beforeOrderCount":1,"afterTotalQty":"0","afterOrderCount":0}
+                        """
+        );
+
+        when(consumerOffsetRepository.findById(offsetId())).thenReturn(Optional.empty());
+        when(eventLogRepository.findByMarketIdAndIdGreaterThanOrderByIdAsc(100L, 0L))
+                .thenReturn(List.of(eventLog));
+
+        // when
+        Throwable firstThrowable = catchThrowable(() -> eventProjector.projectAvailableEvents(100L));
+        Throwable blockedThrowable = catchThrowable(() -> eventProjector.projectAvailableEvents(100L));
+
+        // then
+        assertThat(firstThrowable).isInstanceOf(BusinessException.class);
+        assertThat(blockedThrowable).isInstanceOf(BusinessException.class);
+        BusinessException firstException = (BusinessException) firstThrowable;
+        BusinessException blockedException = (BusinessException) blockedThrowable;
+        assertThat(firstException.getErrorCode()).isEqualTo(ErrorCode.INVALID_EVENT_PAYLOAD);
+        assertThat(blockedException.getErrorCode()).isEqualTo(ErrorCode.PROJECTOR_BLOCKED);
+        verify(consumerOffsetRepository, never()).save(any(ConsumerOffset.class));
+        verify(orderBookProjectionRepository, never()).save(any(OrderBookProjection.class));
+        verify(eventLogRepository).findByMarketIdAndIdGreaterThanOrderByIdAsc(100L, 0L);
     }
 
     private ConsumerOffsetId offsetId() {
