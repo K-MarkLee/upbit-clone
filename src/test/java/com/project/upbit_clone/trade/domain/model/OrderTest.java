@@ -734,6 +734,75 @@ class OrderTest {
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_TRADE_INPUT);
     }
 
+    @Test
+    @DisplayName("Negative : 누적 체결 수량이 주문 수량을 초과하면 BusinessException을 반환한다.")
+    void apply_executed_quantity_rejects_over_executed_quantity() {
+        // given
+        Order order = Order.create(createCommand(
+                market, user, clientOrderId, OrderSide.ASK, OrderType.LIMIT,
+                null, price, BigDecimal.ONE, null
+        ));
+        order.applyExecutedQuantity(new BigDecimal("0.8"), new BigDecimal("8000"));
+
+        BigDecimal executedQuantity = new BigDecimal("0.8");
+        BigDecimal executedQuoteAmount = new BigDecimal("8000");
+
+        // when & then
+        assertThatThrownBy(() -> order.applyExecutedQuantity(executedQuantity, executedQuoteAmount))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ORDER_OVER_EXECUTED);
+
+        assertThat(order.getExecutedQuantity()).isEqualByComparingTo("0.8");
+        assertThat(order.getExecutedQuoteAmount()).isEqualByComparingTo("8000");
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.OPEN);
+    }
+
+    @Test
+    @DisplayName("Negative : MARKET-BID 누적 체결 금액이 주문 quoteAmount를 초과하면 BusinessException을 반환한다.")
+    void apply_executed_quantity_rejects_market_bid_over_spend() {
+        // given
+        Order order = Order.create(createCommand(
+                market, user, clientOrderId, OrderSide.BID, OrderType.MARKET,
+                null, null, null, new BigDecimal("10000")
+        ));
+        order.applyExecutedQuantity(new BigDecimal("0.5"), new BigDecimal("9000"));
+
+        BigDecimal executedQuantity = new BigDecimal("0.5");
+        BigDecimal executionPrice = new BigDecimal("10000");
+
+        // when & then
+        assertThatThrownBy(() -> order.applyExecutedQuantity(executedQuantity, executionPrice))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ORDER_OVER_SPENT);
+
+        assertThat(order.getExecutedQuantity()).isEqualByComparingTo("0.5");
+        assertThat(order.getExecutedQuoteAmount()).isEqualByComparingTo("9000");
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.OPEN);
+    }
+
+    @Test
+    @DisplayName("Negative : LIMIT-BID 누적 체결 금액이 예약 가능 금액을 초과하면 BusinessException을 반환한다.")
+    void apply_executed_quantity_rejects_limit_bid_over_reserved_quote() {
+        // given
+        Order order = Order.create(createCommand(
+                market, user, clientOrderId, OrderSide.BID, OrderType.LIMIT,
+                null, price, BigDecimal.ONE, null
+        ));
+        order.applyExecutedQuantity(new BigDecimal("0.5"), new BigDecimal("5000"));
+
+        BigDecimal executedQuantity = new BigDecimal("0.5");
+        BigDecimal executionPrice = new BigDecimal("10000");
+
+        // when & then
+        assertThatThrownBy(() -> order.applyExecutedQuantity(executedQuantity, executionPrice))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ORDER_OVER_SPENT);
+
+        assertThat(order.getExecutedQuantity()).isEqualByComparingTo("0.5");
+        assertThat(order.getExecutedQuoteAmount()).isEqualByComparingTo("5000");
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.OPEN);
+    }
+
     private static Stream<Arguments> invalidApplyExecutedQuantityInputs() {
         return Stream.of(
                 Arguments.of("executedQuantity null", null, BigDecimal.ONE),
