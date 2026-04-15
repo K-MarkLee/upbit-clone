@@ -371,9 +371,12 @@ public class Order extends BaseEntity {
             throw new BusinessException(ErrorCode.INVALID_TRADE_INPUT);
         }
 
-        // TODO: 누적 과체결 / 과소비 막는 로직 필요.
-        this.executedQuantity = this.executedQuantity.add(executedQuantity);
-        this.executedQuoteAmount = this.executedQuoteAmount.add(executedQuoteAmount);
+        BigDecimal nextExecutedQuantity = this.executedQuantity.add(executedQuantity);
+        BigDecimal nextExecutedQuoteAmount = this.executedQuoteAmount.add(executedQuoteAmount);
+        validateExecutionLimit(nextExecutedQuantity, nextExecutedQuoteAmount);
+
+        this.executedQuantity = nextExecutedQuantity;
+        this.executedQuoteAmount = nextExecutedQuoteAmount;
 
         if (isFilledNow()) {
             this.status = OrderStatus.FILLED;
@@ -400,6 +403,31 @@ public class Order extends BaseEntity {
             return this.executedQuoteAmount.compareTo(this.quoteAmount) >= 0;
         }
         return this.executedQuantity.compareTo(this.quantity) >= 0;
+    }
+
+    // 누적 체결 한도 검사
+    private void validateExecutionLimit(BigDecimal nextExecutedQuantity, BigDecimal nextExecutedQuoteAmount) {
+        if (this.quantity != null && nextExecutedQuantity.compareTo(this.quantity) > 0) {
+            throw new BusinessException(ErrorCode.ORDER_OVER_EXECUTED);
+        }
+
+        BigDecimal maxExecutableQuoteAmount = maxExecutableQuoteAmount();
+        if (maxExecutableQuoteAmount != null && nextExecutedQuoteAmount.compareTo(maxExecutableQuoteAmount) > 0) {
+            throw new BusinessException(ErrorCode.ORDER_OVER_SPENT);
+        }
+    }
+
+    private BigDecimal maxExecutableQuoteAmount() {
+        if (this.orderSide != OrderSide.BID) {
+            return null;
+        }
+        if (this.quoteAmount != null) {
+            return this.quoteAmount;
+        }
+        if (this.price != null && this.quantity != null) {
+            return this.price.multiply(this.quantity);
+        }
+        return null;
     }
 
 }

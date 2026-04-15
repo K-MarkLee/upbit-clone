@@ -4,6 +4,7 @@ import com.project.upbit_clone.trade.application.dispatch.CommandMessage;
 import com.project.upbit_clone.trade.application.engine.EngineResult;
 import com.project.upbit_clone.trade.application.engine.MatchingEngineCore;
 import com.project.upbit_clone.trade.application.engine.orderbook.InMemoryOrderBook;
+import com.project.upbit_clone.trade.application.projector.EventProjector;
 import com.project.upbit_clone.trade.domain.vo.OrderSide;
 import com.project.upbit_clone.trade.domain.vo.OrderType;
 import com.project.upbit_clone.trade.domain.vo.TimeInForce;
@@ -28,11 +29,13 @@ class MarketWorkerTest {
 
     private MarketWorker marketWorker;
     private WorkerWriteService workerWriteService;
+    private EventProjector eventProjector;
 
     @BeforeEach
     void setUp() {
         workerWriteService = Mockito.mock(WorkerWriteService.class);
-        marketWorker = new MarketWorker(100L, new MatchingEngineCore(), workerWriteService);
+        eventProjector = Mockito.mock(EventProjector.class);
+        marketWorker = new MarketWorker(100L, new MatchingEngineCore(), workerWriteService, eventProjector);
     }
 
     @AfterEach
@@ -369,7 +372,7 @@ class MarketWorkerTest {
     void worker_invokes_matching_engine_when_place_message_is_consumed() throws InterruptedException {
         // given
         CapturingMatchingEngineCore matchingEngineCore = new CapturingMatchingEngineCore();
-        marketWorker = new MarketWorker(100L, matchingEngineCore, workerWriteService);
+        marketWorker = new MarketWorker(100L, matchingEngineCore, workerWriteService, eventProjector);
         CommandMessage.Place message = validLimitPlaceMessage();
 
         // when
