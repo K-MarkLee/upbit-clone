@@ -1,9 +1,9 @@
-package com.project.upbit_clone.wallet.presentation.controller;
+package com.project.upbit_clone.trade.presentation.controller;
 
 import com.project.upbit_clone.global.presentation.controller.BaseController;
 import com.project.upbit_clone.global.presentation.response.ApiResponse;
-import com.project.upbit_clone.wallet.application.service.WalletQueryService;
-import com.project.upbit_clone.wallet.presentation.response.WalletQueryResponse;
+import com.project.upbit_clone.trade.application.service.OrderBookQueryService;
+import com.project.upbit_clone.trade.presentation.response.OrderBookResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotNull;
@@ -15,25 +15,23 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
-
 @Validated
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/wallets")
-@Tag(name = "Wallet Query API", description = "지갑 조회 API")
-public class WalletController extends BaseController {
+@RequestMapping("/api/v1/order-books")
+@Tag(name = "Order Book Query API", description = "호가 조회 API")
+public class OrderBookController extends BaseController {
 
-    private final WalletQueryService walletQueryService;
+    private final OrderBookQueryService orderBookQueryService;
 
     @GetMapping
     @Operation(
-            summary = "지갑 목록 조회",
-            description = "사용자 기준 보유 지갑과 잔고를 조회합니다."
+            summary = "호가 조회",
+            description = "order_book_projection 기준으로 매수/매도 각 30레벨을 조회합니다."
     )
-    public ResponseEntity<ApiResponse<List<WalletQueryResponse>>> findWallets(
-            @RequestParam @NotNull Long userId
+    public ResponseEntity<ApiResponse<OrderBookResponse>> findOrderBook(
+            @RequestParam @NotNull Long marketId
     ) {
-        return ok(walletQueryService.findWallets(userId));
+        return ok(orderBookQueryService.findOrderBook(marketId));
     }
 }
