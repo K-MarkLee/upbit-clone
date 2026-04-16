@@ -34,6 +34,7 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -858,10 +859,17 @@ public class WorkerWriteService {
                 return requiredAmount(order.getQuoteAmount(), "market bid 주문의 quoteAmount가 없습니다.")
                         .subtract(order.getExecutedQuoteAmount());
             }
-            return requiredAmount(order.getPrice(), "limit bid 주문의 price가 없습니다.")
-                    .multiply(remainingQuantity(order));
+            return roundDownQuote(
+                    requiredAmount(order.getPrice(), "limit bid 주문의 price가 없습니다.")
+                            .multiply(remainingQuantity(order)),
+                    order
+            );
         }
         return remainingQuantity(order);
+    }
+
+    private BigDecimal roundDownQuote(BigDecimal value, Order order) {
+        return value.setScale(order.getMarket().getQuoteAsset().getDecimals().intValue(), RoundingMode.DOWN);
     }
 
     private BigDecimal remainingQuantityForStatusPayload(Order order) {

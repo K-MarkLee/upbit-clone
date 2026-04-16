@@ -136,6 +136,62 @@ class OrderWriteServiceTest {
         assertThat(ledger.getReferenceId()).isEqualTo(200L);
     }
 
+    @Test
+    @DisplayName("Happy : LIMIT-BID lock 금액은 quote asset scale 기준으로 내림 처리한다.")
+    void writeAcceptedPlace_rounds_limit_bid_lock_amount_down_by_quote_asset_scale() {
+        CommandLog commandLog = commandLog();
+        User user = user();
+        setField(user, "id", 1L);
+        Market market = market((byte) 2);
+        setField(market, "id", 1L);
+        setField(market.getBaseAsset(), "id", 10L);
+        setField(market.getQuoteAsset(), "id", 20L);
+        Wallet quoteWallet = Wallet.create(user, market.getQuoteAsset(), new BigDecimal("20000"), BigDecimal.ZERO);
+        setField(quoteWallet, "id", 100L);
+
+        OrderWriteService.AcceptedPlaceCommand command = new OrderWriteService.AcceptedPlaceCommand(
+                commandLog,
+                user,
+                market,
+                "cid-1",
+                "order-key-1",
+                OrderSide.BID,
+                OrderType.LIMIT,
+                TimeInForce.GTC,
+                new BigDecimal("10000"),
+                new BigDecimal("1.23456789"),
+                null
+        );
+
+        when(walletRepository.findByUserIdAndAssetId(user.getId(), market.getQuoteAsset().getId()))
+                .thenReturn(Optional.of(quoteWallet));
+        when(commandLogRepository.saveAndFlush(any(CommandLog.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(walletRepository.saveAndFlush(any(Wallet.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderRepository.saveAndFlush(any(Order.class)))
+                .thenAnswer(invocation -> {
+                    Order savedOrder = invocation.getArgument(0);
+                    setField(savedOrder, "id", 200L);
+                    return savedOrder;
+                });
+        when(ledgerRepository.save(any(Ledger.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        OrderWriteService.AcceptedPlaceWrite result = orderWriteService.writeAcceptedPlace(command);
+
+        assertThat(result.wallet().getAvailableBalance()).isEqualByComparingTo("7654.33");
+        assertThat(result.wallet().getLockedBalance()).isEqualByComparingTo("12345.67");
+
+        verify(ledgerRepository).save(ledgerCaptor.capture());
+        Ledger ledger = ledgerCaptor.getValue();
+        assertThat(ledger.getAmount()).isEqualByComparingTo("12345.67");
+        assertThat(ledger.getAvailableBefore()).isEqualByComparingTo("20000");
+        assertThat(ledger.getAvailableAfter()).isEqualByComparingTo("7654.33");
+        assertThat(ledger.getLockedBefore()).isEqualByComparingTo("0");
+        assertThat(ledger.getLockedAfter()).isEqualByComparingTo("12345.67");
+    }
+
     @ParameterizedTest(name = "[{index}] {0}")
     @MethodSource("invalidAcceptedPlaceCommands")
     @DisplayName("Negative : 주문 정책 위반이면 command log 저장과 wallet 조회 전에 실패한다.")
@@ -232,8 +288,12 @@ class OrderWriteServiceTest {
     }
 
     private static Market market() {
+        return market((byte) 8);
+    }
+
+    private static Market market(byte quoteAssetDecimals) {
         Asset baseAsset = Asset.create("BTC", "Bitcoin", (byte) 8, EnumStatus.ACTIVE);
-        Asset quoteAsset = Asset.create("KRW", "Korean Won", (byte) 8, EnumStatus.ACTIVE);
+        Asset quoteAsset = Asset.create("KRW", "Korean Won", quoteAssetDecimals, EnumStatus.ACTIVE);
         return Market.create(new Market.CreateCommand(
                 baseAsset,
                 quoteAsset,

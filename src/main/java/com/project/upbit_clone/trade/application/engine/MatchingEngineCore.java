@@ -77,7 +77,7 @@ public class MatchingEngineCore {
             BigDecimal executedQuoteAmount = roundDownQuote(makerHead.getPrice().multiply(executedQuantity), message);
             BigDecimal makerRemainingQuantityAfter = makerHead.getRemainingQty().subtract(executedQuantity);
 
-            if (executedQuantity.compareTo(BigDecimal.ZERO) == 0) {
+            if (executedQuoteAmount.compareTo(BigDecimal.ZERO) == 0) {
                 stopReason = StopReason.NO_EXECUTABLE_SIZE;
                 break;
             }
