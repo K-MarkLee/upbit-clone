@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Objects;
 
 @Service
@@ -126,7 +127,11 @@ public class OrderWriteService {
         if (command.orderType() == OrderType.MARKET) {
             return command.quoteAmount();
         }
-        return command.price().multiply(command.quantity());
+        return roundDownQuote(command.price().multiply(command.quantity()), command);
+    }
+
+    private BigDecimal roundDownQuote(BigDecimal value, AcceptedPlaceCommand command) {
+        return value.setScale(command.market().getQuoteAsset().getDecimals().intValue(), RoundingMode.DOWN);
     }
 
     private String orderLockIdempotencyKey(Order order) {

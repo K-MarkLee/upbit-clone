@@ -130,6 +130,7 @@ class WorkerWriteServiceTest {
                 new BigDecimal("10000"),
                 BigDecimal.ONE,
                 null,
+                8,
                 8
         );
         EngineResult.PlaceResult result = EngineResult.PlaceResult.open(
@@ -188,6 +189,7 @@ class WorkerWriteServiceTest {
                 new BigDecimal("10000"),
                 BigDecimal.ONE,
                 null,
+                8,
                 8
         );
         EngineResult.PlaceResult result = EngineResult.PlaceResult.filled(
@@ -316,6 +318,60 @@ class WorkerWriteServiceTest {
     }
 
     @Test
+    @DisplayName("Happy : LIMIT-BID cancel unlock 금액은 quote asset scale 기준으로 내림 처리한다.")
+    void writeCancel_rounds_limit_bid_remaining_lock_amount_down_by_quote_asset_scale() {
+        User user = user(1L, "user@test.com");
+        Market market = market(100L, (byte) 2);
+        Order order = openOrder(
+                10L,
+                market,
+                user,
+                "open-order",
+                OrderSide.BID,
+                new BigDecimal("10000"),
+                new BigDecimal("1.23456789")
+        );
+        Wallet quoteWallet = wallet(1000L, user, market.getQuoteAsset(), BigDecimal.ZERO, new BigDecimal("12345.67"));
+        CommandLog commandLog = commandLog(22L, 100L, CommandType.CANCEL_ORDER);
+        InMemoryOrderBook.LevelDelta removedLevelDelta = levelDelta(
+                OrderSide.BID,
+                new BigDecimal("10000"),
+                new BigDecimal("1.23456789"),
+                1,
+                BigDecimal.ZERO,
+                0
+        );
+
+        CommandMessage.Cancel message = new CommandMessage.Cancel(
+                22L,
+                user.getId(),
+                100L,
+                "KRW-BTC",
+                "cid-1",
+                order.getOrderKey(),
+                "USER_REQUEST"
+        );
+
+        when(orderRepository.findByOrderKey(order.getOrderKey())).thenReturn(Optional.of(order));
+        when(walletRepository.findAllByUserIdInAndAssetIdIn(any(), any())).thenReturn(List.of(quoteWallet));
+        when(commandLogRepository.getReferenceById(22L)).thenReturn(commandLog);
+
+        workerWriteService.writeCancel(message, removedLevelDelta);
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(quoteWallet.getAvailableBalance()).isEqualByComparingTo("12345.67");
+        assertThat(quoteWallet.getLockedBalance()).isEqualByComparingTo("0");
+
+        verify(ledgerRepository).saveAll(ledgerCaptor.capture());
+        assertThat(ledgerCaptor.getValue()).hasSize(1);
+        Ledger ledger = ledgerCaptor.getValue().iterator().next();
+        assertThat(ledger.getLedgerType()).isEqualTo(LedgerType.ORDER_UNLOCK);
+        assertThat(ledger.getAmount()).isEqualByComparingTo("12345.67");
+        assertThat(ledger.getAvailableAfter()).isEqualByComparingTo("12345.67");
+        assertThat(ledger.getLockedAfter()).isEqualByComparingTo("0");
+    }
+
+    @Test
     @DisplayName("Happy : PENDING 주문 cancel이면 CANCELED와 unlock을 저장하고 order book delta는 남기지 않는다.")
     void writeCancel_cancels_pending_order_without_book_delta() {
         User user = user(1L, "user@test.com");
@@ -399,8 +455,12 @@ class WorkerWriteServiceTest {
     }
 
     private static Market market(Long id) {
+        return market(id, (byte) 8);
+    }
+
+    private static Market market(Long id, byte quoteAssetDecimals) {
         Asset baseAsset = Asset.create("BTC", "Bitcoin", (byte) 8, EnumStatus.ACTIVE);
-        Asset quoteAsset = Asset.create("KRW", "Korean Won", (byte) 8, EnumStatus.ACTIVE);
+        Asset quoteAsset = Asset.create("KRW", "Korean Won", quoteAssetDecimals, EnumStatus.ACTIVE);
         setField(baseAsset, "id", 1L);
         setField(quoteAsset, "id", 2L);
 

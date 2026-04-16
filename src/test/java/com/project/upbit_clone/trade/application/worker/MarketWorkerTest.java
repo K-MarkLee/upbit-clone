@@ -82,6 +82,7 @@ class MarketWorkerTest {
                 new BigDecimal("1000"),
                 new BigDecimal("1"),
                 null,
+                8,
                 8
         );
 
@@ -130,6 +131,7 @@ class MarketWorkerTest {
                 null,
                 new BigDecimal("1"),
                 null,
+                8,
                 8
         );
 
@@ -156,6 +158,7 @@ class MarketWorkerTest {
                 null,
                 null,
                 null,
+                8,
                 8
         );
 
@@ -182,6 +185,7 @@ class MarketWorkerTest {
                 new BigDecimal("1000"),
                 new BigDecimal("1"),
                 new BigDecimal("1000"),
+                8,
                 8
         );
 
@@ -208,6 +212,7 @@ class MarketWorkerTest {
                 new BigDecimal("1000"),
                 new BigDecimal("1"),
                 new BigDecimal("1000"),
+                8,
                 8
         );
 
@@ -234,6 +239,7 @@ class MarketWorkerTest {
                 new BigDecimal("1000"),
                 new BigDecimal("1"),
                 new BigDecimal("1000"),
+                8,
                 8
         );
 
@@ -260,6 +266,7 @@ class MarketWorkerTest {
                 new BigDecimal("1000"),
                 new BigDecimal("1"),
                 null,
+                8,
                 8
         );
 
@@ -286,6 +293,7 @@ class MarketWorkerTest {
                 null,
                 null,
                 new BigDecimal("1000"),
+                8,
                 8
         );
 
@@ -312,6 +320,7 @@ class MarketWorkerTest {
                 BigDecimal.ZERO,
                 new BigDecimal("1"),
                 null,
+                8,
                 8
         );
 
@@ -338,13 +347,41 @@ class MarketWorkerTest {
                 null,
                 null,
                 new BigDecimal("1000"),
-                -1
+                -1,
+                8
         );
 
         // when & then
         assertThatThrownBy(() -> marketWorker.enqueue(message))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("baseAssetScale은 0 이상 8 이하여야 합니다.");
+    }
+
+    @Test
+    @DisplayName("Negative : quoteAssetScale은 0 이상 8 이하여야 한다.")
+    void reject_place_order_with_negative_quote_asset_scale() {
+        // given
+        CommandMessage.Place message = new CommandMessage.Place(
+                1L,
+                10L,
+                100L,
+                "KRW-BTC",
+                "cid-1",
+                "order-key-1",
+                OrderSide.BID,
+                OrderType.MARKET,
+                TimeInForce.IOC,
+                null,
+                null,
+                new BigDecimal("1000"),
+                8,
+                -1
+        );
+
+        // when & then
+        assertThatThrownBy(() -> marketWorker.enqueue(message))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("quoteAssetScale은 0 이상 8 이하여야 합니다.");
     }
 
     @Test
@@ -425,6 +462,7 @@ class MarketWorkerTest {
                 new BigDecimal("1000"),
                 new BigDecimal("1"),
                 null,
+                8,
                 8
         );
     }

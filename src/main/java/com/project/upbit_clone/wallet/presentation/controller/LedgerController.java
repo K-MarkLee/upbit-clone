@@ -2,8 +2,8 @@ package com.project.upbit_clone.wallet.presentation.controller;
 
 import com.project.upbit_clone.global.presentation.controller.BaseController;
 import com.project.upbit_clone.global.presentation.response.ApiResponse;
-import com.project.upbit_clone.wallet.application.service.WalletQueryService;
-import com.project.upbit_clone.wallet.presentation.response.WalletQueryResponse;
+import com.project.upbit_clone.wallet.application.service.LedgerQueryService;
+import com.project.upbit_clone.wallet.presentation.response.LedgerQueryResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotNull;
@@ -20,20 +20,21 @@ import java.util.List;
 @Validated
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/wallets")
-@Tag(name = "Wallet Query API", description = "지갑 조회 API")
-public class WalletController extends BaseController {
+@RequestMapping("/api/v1/ledgers")
+@Tag(name = "Ledger Query API", description = "원장 조회 API")
+public class LedgerController extends BaseController {
 
-    private final WalletQueryService walletQueryService;
+    private final LedgerQueryService ledgerQueryService;
 
     @GetMapping
     @Operation(
-            summary = "지갑 목록 조회",
-            description = "사용자 기준 보유 지갑과 잔고를 조회합니다."
+            summary = "원장 조회",
+            description = "지갑 기준 최근 원장 변동 내역 50건을 최신순으로 조회합니다."
     )
-    public ResponseEntity<ApiResponse<List<WalletQueryResponse>>> findWallets(
-            @RequestParam @NotNull Long userId
+    // TODO: 추후 cursor 기반 조회로 변경한다.
+    public ResponseEntity<ApiResponse<List<LedgerQueryResponse>>> findLedgers(
+            @RequestParam @NotNull Long walletId
     ) {
-        return ok(walletQueryService.findWallets(userId));
+        return ok(ledgerQueryService.findRecentLedgers(walletId));
     }
 }

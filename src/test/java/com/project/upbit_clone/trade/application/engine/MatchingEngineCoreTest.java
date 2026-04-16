@@ -25,6 +25,7 @@ class MatchingEngineCoreTest {
     private Long marketId;
     private String marketCode;
     private int baseAssetScale;
+    private int quoteAssetScale;
     private long nextCommandLogId;
 
     @BeforeEach
@@ -34,6 +35,7 @@ class MatchingEngineCoreTest {
         marketId = 100L;
         marketCode = "KRW-BTC";
         baseAssetScale = 8;
+        quoteAssetScale = 8;
         nextCommandLogId = 1L;
     }
 
@@ -103,6 +105,84 @@ class MatchingEngineCoreTest {
         assertSingleFill(result, orderKey(104L), "1000", "2", "2000");
         assertSingleMatchDelta(result, OrderSide.BID, "1000", "2");
         assertThat(orderBook.findOrder(orderKey(104L))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Happy : quantity 기반 체결 금액은 quoteAssetScale 기준으로 내림 처리된다.")
+    void place_quantity_based_order_rounds_executed_quote_amount_down_by_quote_asset_scale() {
+        // given
+        InMemoryOrderBook orderBook = orderBook(maker(301L, OrderSide.ASK, "3.333", "3"));
+        CommandMessage.Place message = limitBid("4", "3", 2);
+
+        // when
+        EngineResult.PlaceResult result = matchingEngineCore.place(message, orderBook);
+
+        // then
+        assertFilledResult(result, "3", "9.99", "2.01");
+        assertSingleFill(result, orderKey(301L), "3.333", "3", "9.99");
+        assertSingleMatchDelta(result, OrderSide.ASK, "3.333", "3");
+        assertThat(result.executedQuoteAmount().scale()).isEqualTo(2);
+        assertThat(result.unlockAmount().scale()).isEqualTo(2);
+        assertThat(result.fills().getFirst().executedQuoteAmount().scale()).isEqualTo(2);
+        assertThat(orderBook.findOrder(orderKey(301L))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Happy : quote 기반 체결 금액은 quoteAssetScale 기준으로 내림 처리된다.")
+    void place_quote_based_order_rounds_executed_quote_amount_down_by_quote_asset_scale() {
+        // given
+        InMemoryOrderBook orderBook = orderBook(maker(302L, OrderSide.ASK, "1.234", "10"));
+        CommandMessage.Place message = marketBid("20", baseAssetScale, 2);
+
+        // when
+        EngineResult.PlaceResult result = matchingEngineCore.place(message, orderBook);
+
+        // then
+        assertThat(result.takerStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(result.executedQuantity()).isEqualByComparingTo("10");
+        assertThat(result.executedQuoteAmount()).isEqualByComparingTo("12.34");
+        assertThat(result.executedQuoteAmount().scale()).isEqualTo(2);
+        assertThat(result.remainingQuantity()).isNull();
+        assertThat(result.unlockAmount()).isEqualByComparingTo("7.66");
+        assertThat(result.unlockAmount().scale()).isEqualTo(2);
+        assertThat(result.cancelReason()).isEqualTo(EngineResult.CancelReason.IOC_REMAINDER);
+        assertThat(result.fills()).hasSize(1);
+        assertThat(result.bookDeltas()).hasSize(1);
+
+        assertSingleFill(result, orderKey(302L), "1.234", "10", "12.34");
+        assertSingleMatchDelta(result, OrderSide.ASK, "1.234", "10");
+        assertThat(result.fills().getFirst().executedQuoteAmount().scale()).isEqualTo(2);
+        assertThat(orderBook.findOrder(orderKey(302L))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Happy : LIMIT-BID 부분 체결 unlockAmount는 quoteAssetScale 기준 reserve로 계산된다.")
+    void place_limit_bid_partial_execution_rounds_open_unlock_amount_by_quote_asset_scale() {
+        // given
+        InMemoryOrderBook orderBook = orderBook(maker(303L, OrderSide.ASK, "9.999", "1"));
+        CommandMessage.Place message = limitBid("10.009", "2", 2);
+
+        // when
+        EngineResult.PlaceResult result = matchingEngineCore.place(message, orderBook);
+
+        // then
+        assertThat(result.takerStatus()).isEqualTo(OrderStatus.OPEN);
+        assertThat(result.executedQuantity()).isEqualByComparingTo("1");
+        assertThat(result.executedQuoteAmount()).isEqualByComparingTo("9.99");
+        assertThat(result.executedQuoteAmount().scale()).isEqualTo(2);
+        assertThat(result.remainingQuantity()).isEqualByComparingTo("1");
+        assertThat(result.unlockAmount()).isEqualByComparingTo("0.02");
+        assertThat(result.unlockAmount().scale()).isEqualTo(2);
+        assertThat(result.cancelReason()).isNull();
+        assertThat(result.fills()).hasSize(1);
+        assertThat(result.bookDeltas()).hasSize(2);
+
+        assertSingleFill(result, orderKey(303L), "9.999", "1", "9.99");
+        assertMatchDeltaAt(result, 0, OrderSide.ASK, "9.999", "1", 1, "0", 0);
+        assertRestingDeltaAt(result, 1, OrderSide.BID, "10.009", "0", 0, "1", 1);
+        assertRestingOrder(orderBook, message.orderKey(), OrderSide.BID, "10.009", "1");
+        assertThat(result.fills().getFirst().executedQuoteAmount().scale()).isEqualTo(2);
+        assertThat(orderBook.findOrder(orderKey(303L))).isEmpty();
     }
 
     @Test
@@ -230,7 +310,7 @@ class MatchingEngineCoreTest {
     void place_market_bid_without_executable_quote_returns_canceled() {
         // given
         InMemoryOrderBook orderBook = orderBook(maker(203L, OrderSide.ASK, "7", "5"));
-        CommandMessage.Place message = marketBid("3", 0);
+        CommandMessage.Place message = marketBid("3", 0, 1);
 
         // when
         EngineResult.PlaceResult result = matchingEngineCore.place(message, orderBook);
@@ -540,6 +620,10 @@ class MatchingEngineCoreTest {
     }
 
     private CommandMessage.Place limitBid(String price, String quantity) {
+        return limitBid(price, quantity, quoteAssetScale);
+    }
+
+    private CommandMessage.Place limitBid(String price, String quantity, int scaleQuote) {
         return createPlaceMessage(
                 OrderSide.BID,
                 OrderType.LIMIT,
@@ -547,7 +631,8 @@ class MatchingEngineCoreTest {
                 price,
                 quantity,
                 null,
-                baseAssetScale
+                baseAssetScale,
+                scaleQuote
         );
     }
 
@@ -559,15 +644,16 @@ class MatchingEngineCoreTest {
                 price,
                 quantity,
                 null,
-                baseAssetScale
+                baseAssetScale,
+                quoteAssetScale
         );
     }
 
     private CommandMessage.Place marketBid(String quoteAmount) {
-        return marketBid(quoteAmount, baseAssetScale);
+        return marketBid(quoteAmount, baseAssetScale, quoteAssetScale);
     }
 
-    private CommandMessage.Place marketBid(String quoteAmount, int scale) {
+    private CommandMessage.Place marketBid(String quoteAmount, int scaleBase, int scaleQuote) {
         return createPlaceMessage(
                 OrderSide.BID,
                 OrderType.MARKET,
@@ -575,7 +661,8 @@ class MatchingEngineCoreTest {
                 null,
                 null,
                 quoteAmount,
-                scale
+                scaleBase,
+                scaleQuote
         );
     }
 
@@ -587,7 +674,8 @@ class MatchingEngineCoreTest {
                 null,
                 quantity,
                 null,
-                baseAssetScale
+                baseAssetScale,
+                quoteAssetScale
         );
     }
 
@@ -598,7 +686,8 @@ class MatchingEngineCoreTest {
             String price,
             String quantity,
             String quoteAmount,
-            int scale
+            int scaleBase,
+            int scaleQuote
     ) {
         long commandLogId = nextCommandLogId++;
 
@@ -615,7 +704,8 @@ class MatchingEngineCoreTest {
                 decimalOrNull(price),
                 decimalOrNull(quantity),
                 decimalOrNull(quoteAmount),
-                scale
+                scaleBase,
+                scaleQuote
         );
     }
 

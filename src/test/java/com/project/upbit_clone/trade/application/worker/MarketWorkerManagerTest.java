@@ -50,6 +50,7 @@ class MarketWorkerManagerTest {
                 new BigDecimal("1000"),
                 new BigDecimal("1"),
                 null,
+                8,
                 8
         );
         btcCancelMessage = new CommandMessage.Cancel(
@@ -74,6 +75,7 @@ class MarketWorkerManagerTest {
                 new BigDecimal("2000"),
                 new BigDecimal("2"),
                 null,
+                8,
                 8
         );
     }
