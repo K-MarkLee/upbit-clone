@@ -130,6 +130,7 @@ class WorkerWriteServiceTest {
                 new BigDecimal("10000"),
                 BigDecimal.ONE,
                 null,
+                8,
                 8
         );
         EngineResult.PlaceResult result = EngineResult.PlaceResult.open(
@@ -188,6 +189,7 @@ class WorkerWriteServiceTest {
                 new BigDecimal("10000"),
                 BigDecimal.ONE,
                 null,
+                8,
                 8
         );
         EngineResult.PlaceResult result = EngineResult.PlaceResult.filled(

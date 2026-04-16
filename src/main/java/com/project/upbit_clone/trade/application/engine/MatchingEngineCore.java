@@ -74,8 +74,13 @@ public class MatchingEngineCore {
             // executedQuoteAmount = 체결 금액 (maker의 가격과 체결된 갯수의 곱)
             // makerRemainingQuantityAfter = maker 남은 수량 (maker가 체결 후 남은 수량)
             BigDecimal executedQuantity = remainingQuantity.min(makerHead.getRemainingQty());
-            BigDecimal executedQuoteAmount = makerHead.getPrice().multiply(executedQuantity);
+            BigDecimal executedQuoteAmount = roundDownQuote(makerHead.getPrice().multiply(executedQuantity), message);
             BigDecimal makerRemainingQuantityAfter = makerHead.getRemainingQty().subtract(executedQuantity);
+
+            if (executedQuantity.compareTo(BigDecimal.ZERO) == 0) {
+                stopReason = StopReason.NO_EXECUTABLE_SIZE;
+                break;
+            }
 
             // 1회 체결에 대한 정보
             fills.add(new EngineResult.Fill(
@@ -220,10 +225,14 @@ public class MatchingEngineCore {
                 stopReason = StopReason.SELF_TRADE_BLOCKED;
                 break;
             }
-            //executableBudget = min(taker 거래가능 금액, maker 남은 quantity * price)
-            BigDecimal executableBudget = remainingQuoteAmount.min(
-                    makerHead.getPrice().multiply(makerHead.getRemainingQty())
+
+            BigDecimal roundDownQu = roundDownQuote(
+                    makerHead.getPrice().multiply(makerHead.getRemainingQty()),
+                    message
             );
+
+            //executableBudget = min(taker 거래가능 금액, maker 남은 quantity * price)
+            BigDecimal executableBudget = remainingQuoteAmount.min(roundDownQu);
 
             // 거래 가능 금액으로 몇개 살 수 있는지. 금액 / 가격 = 수량
             BigDecimal executedQuantity = executableBudget.divide(
@@ -240,8 +249,13 @@ public class MatchingEngineCore {
             }
 
             // executed 계산
-            BigDecimal executedQuoteAmount = makerHead.getPrice().multiply(executedQuantity);
+            BigDecimal executedQuoteAmount = roundDownQuote(makerHead.getPrice().multiply(executedQuantity), message);
             BigDecimal makerRemainingQuantityAfter = makerHead.getRemainingQty().subtract(executedQuantity);
+
+            if (executedQuoteAmount.compareTo(remainingQuoteAmount) > 0) {
+                stopReason = StopReason.NO_EXECUTABLE_SIZE;
+                break;
+            }
 
             fills.add(new EngineResult.Fill(
                     makerHead.getOrderKey(),
@@ -356,7 +370,7 @@ public class MatchingEngineCore {
     private BigDecimal calculateOpenUnlockAmount(CommandMessage.Place message, QuantityLoopResult loopResult) {
         if (message.orderType() == OrderType.LIMIT && message.orderSide() == OrderSide.BID) {
             BigDecimal reservedAmount = reservedQuoteAmount(message);
-            BigDecimal remainingReserve = message.price().multiply(loopResult.remainingQuantity());
+            BigDecimal remainingReserve = roundDownQuote(message.price().multiply(loopResult.remainingQuantity()), message);
             return nonNegativeUnlock(reservedAmount.subtract(remainingReserve).subtract(loopResult.executedQuoteAmount()));
         }
         return BigDecimal.ZERO;
@@ -380,7 +394,7 @@ public class MatchingEngineCore {
     }
 
     private BigDecimal reservedQuoteAmount(CommandMessage.Place message) {
-        return message.price().multiply(requireQuantity(message));
+        return roundDownQuote(message.price().multiply(requireQuantity(message)), message);
     }
 
     private BigDecimal nonNegativeUnlock(BigDecimal value) {
@@ -388,6 +402,10 @@ public class MatchingEngineCore {
             throw new EngineException("unlockAmount는 음수가 될 수 없습니다.");
         }
         return value;
+    }
+
+    private BigDecimal roundDownQuote(BigDecimal value, CommandMessage.Place message) {
+        return value.setScale(message.quoteAssetScale(), RoundingMode.DOWN);
     }
 
     private enum MatchingMode {
