@@ -34,6 +34,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
@@ -44,6 +47,7 @@ import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
@@ -287,8 +291,7 @@ class WorkerWriteServiceTest {
                 100L,
                 "KRW-BTC",
                 "cid-1",
-                order.getOrderKey(),
-                "USER_REQUEST"
+                order.getOrderKey()
         );
 
         when(orderRepository.findByOrderKey(order.getOrderKey())).thenReturn(Optional.of(order));
@@ -315,6 +318,93 @@ class WorkerWriteServiceTest {
 
         verify(consumerOffsetRepository).save(offsetCaptor.capture());
         assertThat(offsetCaptor.getValue().getLastOffset()).isEqualTo(21L);
+    }
+
+    @ParameterizedTest(name = "[{index}] {0}")
+    @MethodSource("cancelReasonScenarios")
+    @DisplayName("Happy : cancelReason 코드는 최종 주문, 이벤트, 원장에 동일하게 반영된다.")
+    void cancel_reason_codes_are_persisted_consistently(
+            String caseName,
+            EngineResult.CancelReason cancelReason,
+            boolean userCancelFlow
+    ) {
+        User user = user(1L, "user@test.com");
+        Market market = market(100L);
+        Order order = pendingOrder(10L, market, user, "pending-order", OrderSide.BID, new BigDecimal("10000"), BigDecimal.ONE);
+        Wallet quoteWallet = wallet(1000L, user, market.getQuoteAsset(), BigDecimal.ZERO, new BigDecimal("10000"));
+        Long commandLogId = userCancelFlow ? 41L : 42L;
+        CommandLog commandLog = commandLog(
+                commandLogId,
+                100L,
+                userCancelFlow ? CommandType.CANCEL_ORDER : CommandType.PLACE_ORDER
+        );
+
+        when(orderRepository.findByOrderKey(order.getOrderKey())).thenReturn(Optional.of(order));
+        when(walletRepository.findAllByUserIdInAndAssetIdIn(any(), any())).thenReturn(List.of(quoteWallet));
+        when(commandLogRepository.getReferenceById(commandLogId)).thenReturn(commandLog);
+
+        if (userCancelFlow) {
+            CommandMessage.Cancel message = new CommandMessage.Cancel(
+                    commandLogId,
+                    user.getId(),
+                    100L,
+                    "KRW-BTC",
+                    "cid-user-cancel",
+                    order.getOrderKey()
+            );
+            workerWriteService.writeCancel(message, null);
+        } else {
+            CommandMessage.Place message = new CommandMessage.Place(
+                    commandLogId,
+                    user.getId(),
+                    100L,
+                    "KRW-BTC",
+                    "cid-place-cancel",
+                    order.getOrderKey(),
+                    OrderSide.BID,
+                    OrderType.LIMIT,
+                    TimeInForce.GTC,
+                    new BigDecimal("10000"),
+                    BigDecimal.ONE,
+                    null,
+                    8,
+                    8
+            );
+            EngineResult.PlaceResult result = EngineResult.PlaceResult.canceled(
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ONE,
+                    new BigDecimal("10000"),
+                    cancelReason,
+                    List.of(),
+                    List.of()
+            );
+            workerWriteService.writePlace(message, result);
+        }
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(order.getCancelReason()).isEqualTo(cancelReason.name());
+        assertThat(quoteWallet.getAvailableBalance()).isEqualByComparingTo("10000");
+        assertThat(quoteWallet.getLockedBalance()).isEqualByComparingTo("0");
+
+        verify(eventLogRepository).saveAll(eventCaptor.capture());
+        assertThat(findEvent(eventCaptor.getValue(), EventType.ORDER_CANCELED).getPayload())
+                .contains("\"cancelReason\":\"" + cancelReason.name() + "\"");
+
+        verify(ledgerRepository).saveAll(ledgerCaptor.capture());
+        Ledger unlockLedger = ledgerCaptor.getValue().iterator().next();
+        assertThat(unlockLedger.getLedgerType()).isEqualTo(LedgerType.ORDER_UNLOCK);
+        assertThat(unlockLedger.getDescription()).isEqualTo(cancelReason.name());
+    }
+
+    private static Stream<Arguments> cancelReasonScenarios() {
+        return Stream.of(
+                Arguments.of("user cancel", EngineResult.CancelReason.USER_REQUEST, true),
+                Arguments.of("ioc remainder", EngineResult.CancelReason.IOC_REMAINDER, false),
+                Arguments.of("ioc not matched", EngineResult.CancelReason.IOC_NOT_MATCHED, false),
+                Arguments.of("no trade stream", EngineResult.CancelReason.NO_TRADE_STREAM, false),
+                Arguments.of("self trade prevented", EngineResult.CancelReason.SELF_TRADE_PREVENTED, false)
+        );
     }
 
     @Test
@@ -348,8 +438,7 @@ class WorkerWriteServiceTest {
                 100L,
                 "KRW-BTC",
                 "cid-1",
-                order.getOrderKey(),
-                "USER_REQUEST"
+                order.getOrderKey()
         );
 
         when(orderRepository.findByOrderKey(order.getOrderKey())).thenReturn(Optional.of(order));
@@ -386,8 +475,7 @@ class WorkerWriteServiceTest {
                 100L,
                 "KRW-BTC",
                 "cid-2",
-                order.getOrderKey(),
-                null
+                order.getOrderKey()
         );
 
         when(orderRepository.findByOrderKey(order.getOrderKey())).thenReturn(Optional.of(order));
@@ -397,7 +485,7 @@ class WorkerWriteServiceTest {
         workerWriteService.writeCancel(message, null);
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
-        assertThat(order.getCancelReason()).isEqualTo("Order Canceled");
+        assertThat(order.getCancelReason()).isEqualTo("USER_REQUEST");
         assertThat(baseWallet.getAvailableBalance()).isEqualByComparingTo("2");
         assertThat(baseWallet.getLockedBalance()).isEqualByComparingTo("0");
 
@@ -426,8 +514,7 @@ class WorkerWriteServiceTest {
                 100L,
                 "KRW-BTC",
                 "cid-3",
-                order.getOrderKey(),
-                null
+                order.getOrderKey()
         );
 
         when(orderRepository.findByOrderKey(order.getOrderKey())).thenReturn(Optional.of(order));
@@ -446,6 +533,15 @@ class WorkerWriteServiceTest {
                 .containsExactly(EventType.ORDER_CANCELED, EventType.FUNDS_UNLOCKED);
         assertThat(eventCaptor.getValue().iterator().next().getPayload())
                 .contains("\"remainingQuantity\":null");
+    }
+
+    private static EventLog findEvent(Iterable<EventLog> events, EventType eventType) {
+        for (EventLog event : events) {
+            if (event.getEventType() == eventType) {
+                return event;
+            }
+        }
+        throw new IllegalStateException("이벤트를 찾을 수 없습니다: " + eventType);
     }
 
     private static User user(Long id, String email) {

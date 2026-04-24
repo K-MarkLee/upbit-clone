@@ -128,7 +128,7 @@ public class WorkerWriteService {
         Map<WalletKey, Wallet> walletsByKey = loadWallets(targetOrder, List.of());
         Wallet sourceWallet = requireSourceWallet(walletsByKey, targetOrder);
         BigDecimal unlockAmount = remainingLockedAmount(targetOrder);
-        String cancelReason = normalizeCancelReason(message.cancelReason());
+        String cancelReason = EngineResult.CancelReason.USER_REQUEST.name();
         List<PendingOrderLedgerWrite> pendingOrderLedgerWrites = new ArrayList<>();
 
         targetOrder.cancel(cancelReason);
@@ -834,10 +834,6 @@ public class WorkerWriteService {
 
     private String resolveCancelReason(EngineResult.CancelReason cancelReason) {
         return cancelReason == null ? null : cancelReason.name();
-    }
-
-    private String normalizeCancelReason(String cancelReason) {
-        return (cancelReason == null || cancelReason.isBlank()) ? "Order Canceled" : cancelReason.strip();
     }
 
     private String unlockReason(EngineResult.PlaceResult result) {

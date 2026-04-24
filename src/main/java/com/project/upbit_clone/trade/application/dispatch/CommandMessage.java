@@ -45,8 +45,7 @@ public sealed interface CommandMessage permits CommandMessage.Place, CommandMess
             Long marketId,
             String marketCode,
             String clientOrderId,
-            String targetOrderKey,
-            String cancelReason
+            String targetOrderKey
     ) implements CommandMessage {
 
         @Override

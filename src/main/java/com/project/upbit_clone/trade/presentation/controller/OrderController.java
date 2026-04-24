@@ -58,8 +58,7 @@ public class OrderController extends BaseController {
         CommandAck ack = cancelOrder.handle(new CancelOrder.Command(
                 request.userId(),
                 request.marketId(),
-                request.clientOrderId(),
-                request.cancelReason()
+                request.clientOrderId()
         ));
         return ResponseEntity
                 .status(HttpStatus.ACCEPTED)

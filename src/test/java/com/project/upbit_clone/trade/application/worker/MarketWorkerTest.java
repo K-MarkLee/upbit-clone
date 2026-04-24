@@ -104,8 +104,7 @@ class MarketWorkerTest {
                 100L,
                 "KRW-ETH",
                 "cid-2",
-                "order-key-2",
-                null
+                "order-key-2"
         );
 
         // when & then
@@ -394,8 +393,7 @@ class MarketWorkerTest {
                 100L,
                 "KRW-BTC",
                 " ",
-                "order-key-2",
-                null
+                "order-key-2"
         );
 
         // when & then
@@ -432,8 +430,7 @@ class MarketWorkerTest {
                 100L,
                 "KRW-BTC",
                 "cid-1",
-                placeMessage.orderKey(),
-                "USER_REQUEST"
+                placeMessage.orderKey()
         );
 
         // when

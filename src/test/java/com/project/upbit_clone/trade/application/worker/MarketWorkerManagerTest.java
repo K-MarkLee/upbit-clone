@@ -59,8 +59,7 @@ class MarketWorkerManagerTest {
                 BTC_MARKET_ID,
                 "KRW-BTC",
                 "cid-btc-cancel",
-                "order-key-btc-place",
-                "USER_REQUEST"
+                "order-key-btc-place"
         );
         ethPlaceMessage = new CommandMessage.Place(
                 3L,

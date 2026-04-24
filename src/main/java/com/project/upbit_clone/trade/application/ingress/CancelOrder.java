@@ -49,8 +49,7 @@ public class CancelOrder extends AbstractOrderIngress<CancelOrder.Command> {
     public record Command(
             Long userId,
             Long marketId,
-            String clientOrderId,
-            String cancelReason
+            String clientOrderId
     ) implements OrderCommand {
         @Override
         public CommandType commandType() {
@@ -81,8 +80,7 @@ public class CancelOrder extends AbstractOrderIngress<CancelOrder.Command> {
                 command.marketId(),
                 market.getMarketCode(),
                 command.clientOrderId(),
-                targetOrder.getOrderKey(),
-                command.cancelReason()
+                targetOrder.getOrderKey()
         );
     }
 

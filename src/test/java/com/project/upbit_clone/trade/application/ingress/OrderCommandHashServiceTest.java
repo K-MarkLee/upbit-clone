@@ -76,26 +76,11 @@ class OrderCommandHashServiceTest {
     }
 
     @Test
-    @DisplayName("Happy : CancelOrder에서 null/blank cancelReason은 같은 해시를 생성한다.")
-    void hash_cancel_order_null_reason_equals_blank_reason() {
+    @DisplayName("Happy : 정규화된 CANCEL_ORDER는 멱등 키가 달라도 같은 해시를 생성한다.")
+    void hash_cancel_order_ignores_idempotency_key_fields() {
         // given
-        CancelOrder.Command nullReason = new CancelOrder.Command(1L, 1L, "cid-1", null);
-        CancelOrder.Command blankReason = new CancelOrder.Command(1L, 1L, "cid-1", "   ");
-
-        // when
-        String leftHash = hashService.hash(nullReason);
-        String rightHash = hashService.hash(blankReason);
-
-        // then
-        assertThat(leftHash).isEqualTo(rightHash);
-    }
-
-    @Test
-    @DisplayName("Happy : CancelOrder에서 cancelReason 공백 제거 후 동일하면 같은 해시를 생성한다.")
-    void hash_cancel_order_trim_reason() {
-        // given
-        CancelOrder.Command left = new CancelOrder.Command(1L, 1L, "cid-1", "USER_REQUEST");
-        CancelOrder.Command right = new CancelOrder.Command(1L, 1L, "cid-1", "  USER_REQUEST  ");
+        CancelOrder.Command left = new CancelOrder.Command(1L, 1L, "cid-1");
+        CancelOrder.Command right = new CancelOrder.Command(2L, 1L, "cid-2");
 
         // when
         String leftHash = hashService.hash(left);
@@ -103,6 +88,21 @@ class OrderCommandHashServiceTest {
 
         // then
         assertThat(leftHash).isEqualTo(rightHash);
+    }
+
+    @Test
+    @DisplayName("Negative : CANCEL_ORDER에서 marketId가 다르면 해시가 달라진다.")
+    void hash_cancel_order_with_different_market_id() {
+        // given
+        CancelOrder.Command left = new CancelOrder.Command(1L, 1L, "cid-1");
+        CancelOrder.Command right = new CancelOrder.Command(1L, 2L, "cid-1");
+
+        // when
+        String leftHash = hashService.hash(left);
+        String rightHash = hashService.hash(right);
+
+        // then
+        assertThat(leftHash).isNotEqualTo(rightHash);
     }
 
     @Test
