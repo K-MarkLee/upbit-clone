@@ -29,12 +29,13 @@ public class LedgerController extends BaseController {
     @GetMapping
     @Operation(
             summary = "원장 조회",
-            description = "지갑 기준 최근 원장 변동 내역 50건을 최신순으로 조회합니다."
+            description = "userId와 walletId가 일치하는 지갑의 최근 원장 변동 내역 50건을 최신순으로 조회합니다."
     )
     // TODO: 추후 cursor 기반 조회로 변경한다.
     public ResponseEntity<ApiResponse<List<LedgerQueryResponse>>> findLedgers(
+            @RequestParam @NotNull Long userId,
             @RequestParam @NotNull Long walletId
     ) {
-        return ok(ledgerQueryService.findRecentLedgers(walletId));
+        return ok(ledgerQueryService.findRecentLedgers(userId, walletId));
     }
 }

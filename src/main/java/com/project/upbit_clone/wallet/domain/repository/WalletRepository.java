@@ -13,6 +13,8 @@ import java.util.Optional;
 public interface WalletRepository extends JpaRepository<Wallet, Long> {
     Optional<Wallet> findByUserIdAndAssetId(Long userId, Long assetId);
 
+    boolean existsByIdAndUserId(Long walletId, Long userId);
+
     @EntityGraph(attributePaths = {"user", "asset"})
     List<Wallet> findAllByUserIdInAndAssetIdIn(Collection<Long> userIds, Collection<Long> assetIds);
 
