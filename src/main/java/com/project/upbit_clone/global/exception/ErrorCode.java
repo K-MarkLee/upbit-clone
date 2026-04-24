@@ -41,6 +41,7 @@ public enum ErrorCode {
     INSUFFICIENT_AVAILABLE_BALANCE("G03", "가용 잔고가 부족합니다.", HttpStatus.BAD_REQUEST),
     BASE_WALLET_NOT_FOUND("G04", "Base 지갑을 찾을 수 없습니다." , HttpStatus.BAD_REQUEST),
     INSUFFICIENT_LOCKED_BALANCE("G05", "잠금 잔고가 부족합니다." , HttpStatus.BAD_REQUEST),
+    WALLET_NOT_FOUND("G06", "일치하는 지갑을 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
 
     //asset
     INVALID_ASSET_INPUT("F01", "유효하지 않은 자산 입력입니다.", HttpStatus.BAD_REQUEST),
