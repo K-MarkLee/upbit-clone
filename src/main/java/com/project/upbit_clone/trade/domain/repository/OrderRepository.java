@@ -12,6 +12,7 @@ import java.util.Optional;
 @Repository
 public interface OrderRepository extends JpaRepository<Order, Long> {
 
+    @EntityGraph(attributePaths = {"user", "market", "market.baseAsset", "market.quoteAsset"})
     Optional<Order> findByUserIdAndClientOrderIdAndMarketId(
             Long userId,
             String clientOrderId,
@@ -19,8 +20,17 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     );
 
     @EntityGraph(attributePaths = {"user", "market", "market.baseAsset", "market.quoteAsset"})
+    Optional<Order> findByUserIdAndClientOrderId(Long userId, String clientOrderId);
+
+    @EntityGraph(attributePaths = {"user", "market", "market.baseAsset", "market.quoteAsset"})
     Optional<Order> findByOrderKey(String orderKey);
 
     @EntityGraph(attributePaths = {"user", "market", "market.baseAsset", "market.quoteAsset"})
     List<Order> findAllByOrderKeyIn(Collection<String> orderKeys);
+
+    @EntityGraph(attributePaths = {"user", "market", "market.baseAsset", "market.quoteAsset"})
+    List<Order> findAllByUserIdOrderByIdDesc(Long userId);
+
+    @EntityGraph(attributePaths = {"user", "market", "market.baseAsset", "market.quoteAsset"})
+    List<Order> findAllByUserIdAndMarketIdOrderByIdDesc(Long userId, Long marketId);
 }

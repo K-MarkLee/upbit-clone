@@ -34,9 +34,7 @@ public final class OrderRequest {
             @NotNull Long marketId,
             @NotBlank
             @Size(max = 150, message = "client order id는 150자 보다 클 수 없습니다.")
-            String clientOrderId,
-            @Size(max = 50, message = "cancel reason은 50자 보다 클 수 없습니다.")
-            String cancelReason
+            String clientOrderId
     ) {
     }
 }

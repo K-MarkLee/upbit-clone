@@ -168,10 +168,10 @@ class CancelOrderTest {
     private static Stream<Arguments> missingRequiredInputs() {
         return Stream.of(
                 Arguments.of("command null", null),
-                Arguments.of("userId null", new CancelOrder.Command(null, 1L, "cid-1", null)),
-                Arguments.of("marketId null", new CancelOrder.Command(1L, null, "cid-1", null)),
-                Arguments.of("clientOrderId null", new CancelOrder.Command(1L, 1L, null, null)),
-                Arguments.of("clientOrderId blank", new CancelOrder.Command(1L, 1L, "   ", null))
+                Arguments.of("userId null", new CancelOrder.Command(null, 1L, "cid-1")),
+                Arguments.of("marketId null", new CancelOrder.Command(1L, null, "cid-1")),
+                Arguments.of("clientOrderId null", new CancelOrder.Command(1L, 1L, null)),
+                Arguments.of("clientOrderId blank", new CancelOrder.Command(1L, 1L, "   "))
         );
     }
 
@@ -245,7 +245,7 @@ class CancelOrderTest {
 
     // 주문 취소 헬퍼
     private CancelOrder.Command validCommand() {
-        return new CancelOrder.Command(1L, 1L, "cid-1", "USER_REQUEST");
+        return new CancelOrder.Command(1L, 1L, "cid-1");
     }
 
     // 마켓 생성 헬퍼

@@ -29,7 +29,8 @@ public sealed interface CommandMessage permits CommandMessage.Place, CommandMess
             BigDecimal price,
             BigDecimal quantity,
             BigDecimal quoteAmount,
-            int baseAssetScale
+            int baseAssetScale,
+            int quoteAssetScale
     ) implements CommandMessage {
 
         @Override
@@ -44,8 +45,7 @@ public sealed interface CommandMessage permits CommandMessage.Place, CommandMess
             Long marketId,
             String marketCode,
             String clientOrderId,
-            String targetOrderKey,
-            String cancelReason
+            String targetOrderKey
     ) implements CommandMessage {
 
         @Override

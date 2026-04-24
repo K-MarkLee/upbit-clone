@@ -131,7 +131,8 @@ public class PlaceOrder extends AbstractOrderIngress<PlaceOrder.Command> {
                 command.price(),
                 command.quantity(),
                 command.quoteAmount(),
-                market.getBaseAsset().getDecimals().intValue()
+                market.getBaseAsset().getDecimals().intValue(),
+                market.getQuoteAsset().getDecimals().intValue()
         );
     }
 

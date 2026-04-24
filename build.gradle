@@ -50,7 +50,7 @@ tasks.named('test') {
 	useJUnitPlatform()
 
 	// 테스트 통과 못해도 통과
-	ignoreFailures = true
+	ignoreFailures = false
 
 	finalizedBy jacocoTestReport
 }

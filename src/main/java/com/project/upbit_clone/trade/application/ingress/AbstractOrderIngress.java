@@ -170,7 +170,7 @@ abstract class AbstractOrderIngress<C extends OrderCommand> {
         } catch (JacksonException exception) {
             throw new BusinessException(
                     ErrorCode.INTERNAL_SERVER_ERROR,
-                    "JSON 직렬화에 실패했씁니다."
+                    "JSON 직렬화에 실패했습니다."
             );
         }
     }

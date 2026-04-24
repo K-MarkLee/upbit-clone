@@ -34,6 +34,7 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -127,7 +128,7 @@ public class WorkerWriteService {
         Map<WalletKey, Wallet> walletsByKey = loadWallets(targetOrder, List.of());
         Wallet sourceWallet = requireSourceWallet(walletsByKey, targetOrder);
         BigDecimal unlockAmount = remainingLockedAmount(targetOrder);
-        String cancelReason = normalizeCancelReason(message.cancelReason());
+        String cancelReason = EngineResult.CancelReason.USER_REQUEST.name();
         List<PendingOrderLedgerWrite> pendingOrderLedgerWrites = new ArrayList<>();
 
         targetOrder.cancel(cancelReason);
@@ -835,10 +836,6 @@ public class WorkerWriteService {
         return cancelReason == null ? null : cancelReason.name();
     }
 
-    private String normalizeCancelReason(String cancelReason) {
-        return (cancelReason == null || cancelReason.isBlank()) ? "Order Canceled" : cancelReason.strip();
-    }
-
     private String unlockReason(EngineResult.PlaceResult result) {
         String reason = resolveCancelReason(result.cancelReason());
         return reason == null ? "MATCH_REMAINDER_UNLOCK" : reason;
@@ -858,10 +855,17 @@ public class WorkerWriteService {
                 return requiredAmount(order.getQuoteAmount(), "market bid 주문의 quoteAmount가 없습니다.")
                         .subtract(order.getExecutedQuoteAmount());
             }
-            return requiredAmount(order.getPrice(), "limit bid 주문의 price가 없습니다.")
-                    .multiply(remainingQuantity(order));
+            return roundDownQuote(
+                    requiredAmount(order.getPrice(), "limit bid 주문의 price가 없습니다.")
+                            .multiply(remainingQuantity(order)),
+                    order
+            );
         }
         return remainingQuantity(order);
+    }
+
+    private BigDecimal roundDownQuote(BigDecimal value, Order order) {
+        return value.setScale(order.getMarket().getQuoteAsset().getDecimals().intValue(), RoundingMode.DOWN);
     }
 
     private BigDecimal remainingQuantityForStatusPayload(Order order) {

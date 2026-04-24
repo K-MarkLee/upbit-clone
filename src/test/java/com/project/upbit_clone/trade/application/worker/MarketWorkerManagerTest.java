@@ -50,6 +50,7 @@ class MarketWorkerManagerTest {
                 new BigDecimal("1000"),
                 new BigDecimal("1"),
                 null,
+                8,
                 8
         );
         btcCancelMessage = new CommandMessage.Cancel(
@@ -58,8 +59,7 @@ class MarketWorkerManagerTest {
                 BTC_MARKET_ID,
                 "KRW-BTC",
                 "cid-btc-cancel",
-                "order-key-btc-place",
-                "USER_REQUEST"
+                "order-key-btc-place"
         );
         ethPlaceMessage = new CommandMessage.Place(
                 3L,
@@ -74,6 +74,7 @@ class MarketWorkerManagerTest {
                 new BigDecimal("2000"),
                 new BigDecimal("2"),
                 null,
+                8,
                 8
         );
     }

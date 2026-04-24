@@ -200,6 +200,9 @@ public class MarketWorker {
         if (message.baseAssetScale() < 0 || message.baseAssetScale() > 8) {
             throw new IllegalArgumentException("baseAssetScale은 0 이상 8 이하여야 합니다.");
         }
+        if (message.quoteAssetScale() < 0 || message.quoteAssetScale() > 8) {
+            throw new IllegalArgumentException("quoteAssetScale은 0 이상 8 이하여야 합니다.");
+        }
 
         switch (message.orderType()) {
             case LIMIT -> validateLimitPlace(message);
