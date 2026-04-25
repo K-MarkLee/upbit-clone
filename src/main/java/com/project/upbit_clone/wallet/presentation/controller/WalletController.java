@@ -7,6 +7,7 @@ import com.project.upbit_clone.wallet.presentation.response.WalletQueryResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -32,7 +33,7 @@ public class WalletController extends BaseController {
             description = "사용자 기준 보유 지갑과 잔고를 조회합니다."
     )
     public ResponseEntity<ApiResponse<List<WalletQueryResponse>>> findWallets(
-            @RequestParam @NotNull Long userId
+            @RequestParam @NotNull @Positive Long userId
     ) {
         return ok(walletQueryService.findWallets(userId));
     }

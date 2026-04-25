@@ -7,6 +7,7 @@ import com.project.upbit_clone.trade.presentation.response.TradeQueryResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -33,7 +34,7 @@ public class TradeQueryController extends BaseController {
     )
     // TODO: 추후 cursor 기반 조회로 변경한다.
     public ResponseEntity<ApiResponse<List<TradeQueryResponse>>> findRecentTrades(
-            @RequestParam @NotNull Long marketId
+            @RequestParam @NotNull @Positive Long marketId
     ) {
         return ok(tradeQueryService.findRecentTrades(marketId));
     }

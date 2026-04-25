@@ -48,19 +48,19 @@ public class BookOrderEntry {
             BigDecimal remainingQty
     ) {
         if (orderKey == null || orderKey.isBlank() || userId == null || side == null || price == null || remainingQty == null) {
-            throw new IllegalArgumentException("order entry 필수값이 누락되어 있습니다.");
+            throw new EngineException("order entry 필수값이 누락되어 있습니다.");
         }
         if (price.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("price는 0보다 커야 합니다.");
+            throw new EngineException("price는 0보다 커야 합니다.");
         }
         if (remainingQty.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("remainingQty는 0보다 커야 합니다.");
+            throw new EngineException("remainingQty는 0보다 커야 합니다.");
         }
     }
 
     void decreaseRemainingQty(BigDecimal executedQty) {
         if (executedQty == null || executedQty.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("executedQty는 0보다 커야 합니다.");
+            throw new EngineException("executedQty는 0보다 커야 합니다.");
         }
         if (remainingQty.compareTo(executedQty) < 0) {
             throw new EngineException("executedQty exceeds remainingQty");

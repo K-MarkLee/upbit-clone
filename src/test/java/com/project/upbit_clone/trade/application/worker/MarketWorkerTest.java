@@ -61,7 +61,7 @@ class MarketWorkerTest {
     @DisplayName("Negative : null 메시지는 적재할 수 없다.")
     void reject_null_message() {
         assertThatThrownBy(() -> marketWorker.enqueue(null))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(IllegalStateException.class)
                 .hasMessage("message 필수값이 누락되어 있습니다.");
     }
 
@@ -88,7 +88,7 @@ class MarketWorkerTest {
 
         // when & then
         assertThatThrownBy(() -> marketWorker.enqueue(message))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(IllegalStateException.class)
                 .hasMessage("message의 marketId가 worker의 marketId와 다릅니다.");
     }
 
@@ -109,7 +109,7 @@ class MarketWorkerTest {
 
         // when & then
         assertThatThrownBy(() -> marketWorker.enqueue(message))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(IllegalStateException.class)
                 .hasMessage("message의 marketCode가 worker의 marketCode와 다릅니다.");
     }
 
@@ -136,7 +136,7 @@ class MarketWorkerTest {
 
         // when & then
         assertThatThrownBy(() -> marketWorker.enqueue(message))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(IllegalStateException.class)
                 .hasMessage("limit place message 필수값이 누락되어 있습니다.");
     }
 
@@ -163,7 +163,7 @@ class MarketWorkerTest {
 
         // when & then
         assertThatThrownBy(() -> marketWorker.enqueue(message))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(IllegalStateException.class)
                 .hasMessage("market bid message 필수값이 누락되어 있습니다.");
     }
 
@@ -190,7 +190,7 @@ class MarketWorkerTest {
 
         // when & then
         assertThatThrownBy(() -> marketWorker.enqueue(message))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(IllegalStateException.class)
                 .hasMessage("limit 주문은 quoteAmount를 허용하지 않습니다.");
     }
 
@@ -217,7 +217,7 @@ class MarketWorkerTest {
 
         // when & then
         assertThatThrownBy(() -> marketWorker.enqueue(message))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(IllegalStateException.class)
                 .hasMessage("market bid 주문은 price와 quantity를 허용하지 않습니다.");
     }
 
@@ -244,7 +244,7 @@ class MarketWorkerTest {
 
         // when & then
         assertThatThrownBy(() -> marketWorker.enqueue(message))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(IllegalStateException.class)
                 .hasMessage("market ask 주문은 price와 quoteAmount를 허용하지 않습니다.");
     }
 
@@ -271,7 +271,7 @@ class MarketWorkerTest {
 
         // when & then
         assertThatThrownBy(() -> marketWorker.enqueue(message))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(IllegalStateException.class)
                 .hasMessage("limit 주문은 GTC만 허용합니다.");
     }
 
@@ -298,7 +298,7 @@ class MarketWorkerTest {
 
         // when & then
         assertThatThrownBy(() -> marketWorker.enqueue(message))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(IllegalStateException.class)
                 .hasMessage("market 주문은 IOC만 허용합니다.");
     }
 
@@ -325,7 +325,7 @@ class MarketWorkerTest {
 
         // when & then
         assertThatThrownBy(() -> marketWorker.enqueue(message))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(IllegalStateException.class)
                 .hasMessage("limit 주문의 price는 0보다 커야 합니다.");
     }
 
@@ -352,7 +352,7 @@ class MarketWorkerTest {
 
         // when & then
         assertThatThrownBy(() -> marketWorker.enqueue(message))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(IllegalStateException.class)
                 .hasMessage("baseAssetScale은 0 이상 8 이하여야 합니다.");
     }
 
@@ -379,7 +379,7 @@ class MarketWorkerTest {
 
         // when & then
         assertThatThrownBy(() -> marketWorker.enqueue(message))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(IllegalStateException.class)
                 .hasMessage("quoteAssetScale은 0 이상 8 이하여야 합니다.");
     }
 
@@ -398,7 +398,7 @@ class MarketWorkerTest {
 
         // when & then
         assertThatThrownBy(() -> marketWorker.enqueue(message))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(IllegalStateException.class)
                 .hasMessage("message 필수값이 누락되어 있습니다.");
     }
 

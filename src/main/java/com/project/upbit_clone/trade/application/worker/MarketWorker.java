@@ -69,7 +69,7 @@ public class MarketWorker {
     public void enqueue(CommandMessage message) {
         validateMessage(message);
         if (!marketId.equals(message.marketId())) {
-            throw new IllegalArgumentException("message의 marketId가 worker의 marketId와 다릅니다.");
+            throw new IllegalStateException("message의 marketId가 worker의 marketId와 다릅니다.");
         }
         bindMarketCode(message.marketCode());
         mailbox.add(message);
@@ -161,7 +161,7 @@ public class MarketWorker {
         }
 
         if (!this.marketCode.equals(marketCode)) {
-            throw new IllegalArgumentException("message의 marketCode가 worker의 marketCode와 다릅니다.");
+            throw new IllegalStateException("message의 marketCode가 worker의 marketCode와 다릅니다.");
         }
     }
 
@@ -176,7 +176,7 @@ public class MarketWorker {
                 || message.clientOrderId() == null
                 || message.clientOrderId().isBlank()
                 || message.commandType() == null) {
-            throw new IllegalArgumentException("message 필수값이 누락되어 있습니다.");
+            throw new IllegalStateException("message 필수값이 누락되어 있습니다.");
         }
 
         // limit 과 market에 따른 검증
@@ -195,31 +195,31 @@ public class MarketWorker {
                 || message.orderKey().isBlank()
                 || message.orderSide() == null
                 || message.orderType() == null) {
-            throw new IllegalArgumentException("place message 필수값이 누락되어 있습니다.");
+            throw new IllegalStateException("place message 필수값이 누락되어 있습니다.");
         }
         if (message.baseAssetScale() < 0 || message.baseAssetScale() > 8) {
-            throw new IllegalArgumentException("baseAssetScale은 0 이상 8 이하여야 합니다.");
+            throw new IllegalStateException("baseAssetScale은 0 이상 8 이하여야 합니다.");
         }
         if (message.quoteAssetScale() < 0 || message.quoteAssetScale() > 8) {
-            throw new IllegalArgumentException("quoteAssetScale은 0 이상 8 이하여야 합니다.");
+            throw new IllegalStateException("quoteAssetScale은 0 이상 8 이하여야 합니다.");
         }
 
         switch (message.orderType()) {
             case LIMIT -> validateLimitPlace(message);
             case MARKET -> validateMarketPlace(message);
-            default -> throw new IllegalArgumentException("지원하지 않는 orderType 입니다.");
+            default -> throw new IllegalStateException("지원하지 않는 orderType 입니다.");
         }
     }
 
     private void validateLimitPlace(CommandMessage.Place message) {
         if (message.price() == null || message.quantity() == null) {
-            throw new IllegalArgumentException("limit place message 필수값이 누락되어 있습니다.");
+            throw new IllegalStateException("limit place message 필수값이 누락되어 있습니다.");
         }
         if (message.quoteAmount() != null) {
-            throw new IllegalArgumentException("limit 주문은 quoteAmount를 허용하지 않습니다.");
+            throw new IllegalStateException("limit 주문은 quoteAmount를 허용하지 않습니다.");
         }
         if (message.timeInForce() != TimeInForce.GTC) {
-            throw new IllegalArgumentException("limit 주문은 GTC만 허용합니다.");
+            throw new IllegalStateException("limit 주문은 GTC만 허용합니다.");
         }
         validatePositive(message.price(), "limit 주문의 price는 0보다 커야 합니다.");
         validatePositive(message.quantity(), "limit 주문의 quantity는 0보다 커야 합니다.");
@@ -227,7 +227,7 @@ public class MarketWorker {
 
     private void validateMarketPlace(CommandMessage.Place message) {
         if (message.timeInForce() != TimeInForce.IOC) {
-            throw new IllegalArgumentException("market 주문은 IOC만 허용합니다.");
+            throw new IllegalStateException("market 주문은 IOC만 허용합니다.");
         }
 
         switch (message.orderSide()) {
@@ -238,33 +238,33 @@ public class MarketWorker {
 
     private void validateMarketBidPlace(CommandMessage.Place message) {
         if (message.quoteAmount() == null) {
-            throw new IllegalArgumentException("market bid message 필수값이 누락되어 있습니다.");
+            throw new IllegalStateException("market bid message 필수값이 누락되어 있습니다.");
         }
         if (message.price() != null || message.quantity() != null) {
-            throw new IllegalArgumentException("market bid 주문은 price와 quantity를 허용하지 않습니다.");
+            throw new IllegalStateException("market bid 주문은 price와 quantity를 허용하지 않습니다.");
         }
         validatePositive(message.quoteAmount(), "market bid 주문의 quoteAmount는 0보다 커야 합니다.");
     }
 
     private void validateMarketAskPlace(CommandMessage.Place message) {
         if (message.quantity() == null) {
-            throw new IllegalArgumentException("market ask message 필수값이 누락되어 있습니다.");
+            throw new IllegalStateException("market ask message 필수값이 누락되어 있습니다.");
         }
         if (message.price() != null || message.quoteAmount() != null) {
-            throw new IllegalArgumentException("market ask 주문은 price와 quoteAmount를 허용하지 않습니다.");
+            throw new IllegalStateException("market ask 주문은 price와 quoteAmount를 허용하지 않습니다.");
         }
         validatePositive(message.quantity(), "market ask 주문의 quantity는 0보다 커야 합니다.");
     }
 
     private void validatePositive(BigDecimal value, String message) {
         if (value == null || value.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException(message);
+            throw new IllegalStateException(message);
         }
     }
 
     private void validateCancel(CommandMessage.Cancel message) {
         if (message.targetOrderKey() == null || message.targetOrderKey().isBlank()) {
-            throw new IllegalArgumentException("cancel message 필수값이 누락되어 있습니다.");
+            throw new IllegalStateException("cancel message 필수값이 누락되어 있습니다.");
         }
     }
 

@@ -51,7 +51,7 @@ public class InMemoryOrderBook {
     // 주문을 제거하고 비어 있는 가격 레벨은 함께 정리한다.
     public Optional<LevelDelta> remove(String orderKey) {
         if (orderKey == null || orderKey.isBlank()) {
-            throw new IllegalArgumentException("orderKey는 비어 있을 수 없습니다.");
+            throw new EngineException("orderKey는 비어 있을 수 없습니다.");
         }
 
         BookOrderEntry entry = orderIndex.get(orderKey);
@@ -135,7 +135,7 @@ public class InMemoryOrderBook {
     // add/previewAdd 전 엔트리 최소 검증.
     private void validateAddableEntry(BookOrderEntry entry) {
         if (entry == null || entry.getSide() == null || entry.getPrice() == null || entry.getRemainingQty() == null) {
-            throw new IllegalArgumentException("entry 필수값이 누락되어 있습니다.");
+            throw new EngineException("entry 필수값이 누락되어 있습니다.");
         }
         if (orderIndex.containsKey(entry.getOrderKey())) {
             throw new EngineException("중복된 orderKey 입니다.: " + entry.getOrderKey());
@@ -149,10 +149,10 @@ public class InMemoryOrderBook {
     // side / price 공통 검증.
     private void validateSideAndPrice(OrderSide side, BigDecimal price) {
         if (side == null || price == null) {
-            throw new IllegalArgumentException("side/price는 null일 수 없습니다.");
+            throw new EngineException("side/price는 null일 수 없습니다.");
         }
         if (price.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("price는 0보다 커야 합니다.");
+            throw new EngineException("price는 0보다 커야 합니다.");
         }
     }
 
@@ -196,7 +196,7 @@ public class InMemoryOrderBook {
     // orderKey 기준 엔트리 조회
     public Optional<BookOrderEntry> findOrder(String orderKey) {
         if (orderKey == null || orderKey.isBlank()) {
-            throw new IllegalArgumentException("orderKey는 비어 있을 수 없습니다.");
+            throw new EngineException("orderKey는 비어 있을 수 없습니다.");
         }
         return Optional.ofNullable(orderIndex.get(orderKey));
     }

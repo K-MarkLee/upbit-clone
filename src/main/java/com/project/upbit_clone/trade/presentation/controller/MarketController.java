@@ -7,6 +7,7 @@ import com.project.upbit_clone.trade.presentation.response.MarketQueryResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -41,7 +42,7 @@ public class MarketController extends BaseController {
             description = "시장 ID 기준으로 시장 상세 정보를 조회합니다."
     )
     public ResponseEntity<ApiResponse<MarketQueryResponse>> findMarket(
-            @PathVariable @NotNull Long marketId
+            @PathVariable @NotNull @Positive Long marketId
     ) {
         return ok(marketQueryService.findMarket(marketId));
     }
