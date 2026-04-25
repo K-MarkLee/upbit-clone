@@ -355,14 +355,14 @@ public class MatchingEngineCore {
 
     private BigDecimal requireQuantity(CommandMessage.Place message) {
         if (message.quantity() == null) {
-            throw new IllegalArgumentException("quantity는 null일 수 없습니다.");
+            throw new EngineException("quantity는 null일 수 없습니다.");
         }
         return message.quantity();
     }
 
     private BigDecimal requireQuoteAmount(CommandMessage.Place message) {
         if (message.quoteAmount() == null) {
-            throw new IllegalArgumentException("quoteAmount는 null일 수 없습니다.");
+            throw new EngineException("quoteAmount는 null일 수 없습니다.");
         }
         return message.quoteAmount();
     }

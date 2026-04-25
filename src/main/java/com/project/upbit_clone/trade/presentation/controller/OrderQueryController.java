@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -33,8 +34,8 @@ public class OrderQueryController extends BaseController {
             description = "사용자 기준 주문 목록을 조회합니다. marketId를 전달하면 해당 시장 주문만 반환합니다."
     )
     public ResponseEntity<ApiResponse<List<OrderQueryResponse>>> findOrders(
-            @RequestParam @NotNull Long userId,
-            @RequestParam(required = false) Long marketId
+            @RequestParam @NotNull @Positive Long userId,
+            @RequestParam(required = false) @Positive Long marketId
     ) {
         return ok(orderQueryService.findOrders(userId, marketId));
     }
@@ -45,7 +46,7 @@ public class OrderQueryController extends BaseController {
             description = "외부 식별자인 userId, clientOrderId 조합으로 주문을 조회합니다."
     )
     public ResponseEntity<ApiResponse<OrderQueryResponse>> findOrder(
-            @RequestParam @NotNull Long userId,
+            @RequestParam @NotNull @Positive Long userId,
             @RequestParam @NotBlank String clientOrderId
     ) {
         return ok(orderQueryService.findOrder(userId, clientOrderId));

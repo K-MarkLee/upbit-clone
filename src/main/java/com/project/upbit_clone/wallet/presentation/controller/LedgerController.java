@@ -7,6 +7,7 @@ import com.project.upbit_clone.wallet.presentation.response.LedgerQueryResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -33,8 +34,8 @@ public class LedgerController extends BaseController {
     )
     // TODO: 추후 cursor 기반 조회로 변경한다.
     public ResponseEntity<ApiResponse<List<LedgerQueryResponse>>> findLedgers(
-            @RequestParam @NotNull Long userId,
-            @RequestParam @NotNull Long walletId
+            @RequestParam @NotNull @Positive  Long userId,
+            @RequestParam @NotNull @Positive Long walletId
     ) {
         return ok(ledgerQueryService.findRecentLedgers(userId, walletId));
     }

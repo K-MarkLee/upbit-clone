@@ -7,6 +7,7 @@ import com.project.upbit_clone.trade.presentation.response.OrderBookResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -30,7 +31,7 @@ public class OrderBookController extends BaseController {
             description = "order_book_projection 기준으로 매수/매도 각 30레벨을 조회합니다."
     )
     public ResponseEntity<ApiResponse<OrderBookResponse>> findOrderBook(
-            @RequestParam @NotNull Long marketId
+            @RequestParam @NotNull @Positive Long marketId
     ) {
         return ok(orderBookQueryService.findOrderBook(marketId));
     }

@@ -398,7 +398,7 @@ class InMemoryOrderBookTest {
 
         assertThatThrownBy(() -> orderBook.applyExecution(
                 OrderSide.BID, price, qty))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(EngineException.class);
     }
 
     private static String orderKey(Long orderId) {

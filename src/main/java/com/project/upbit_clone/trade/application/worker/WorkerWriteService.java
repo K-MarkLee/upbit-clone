@@ -421,7 +421,7 @@ public class WorkerWriteService {
                 // applyFills(...)가 FILLED까지 올린다.
             }
             case CANCELED -> taker.cancel(resolveCancelReason(result.cancelReason()));
-            case PENDING -> throw new IllegalArgumentException("PENDING 상태는 worker 최종 상태가 될 수 없습니다.");
+            case PENDING -> throw new IllegalStateException("PENDING 상태는 worker 최종 상태가 될 수 없습니다.");
         }
 
         if (result.unlockAmount().compareTo(BigDecimal.ZERO) > 0) {
@@ -716,7 +716,7 @@ public class WorkerWriteService {
             case OPEN -> EventType.ORDER_OPENED;
             case FILLED -> EventType.ORDER_FILLED;
             case CANCELED -> EventType.ORDER_CANCELED;
-            case PENDING -> throw new IllegalArgumentException("PENDING 상태는 최종 이벤트가 될 수 없습니다.");
+            case PENDING -> throw new IllegalStateException("PENDING 상태는 최종 이벤트가 될 수 없습니다.");
         };
     }
 
