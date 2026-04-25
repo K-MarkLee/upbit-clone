@@ -25,7 +25,8 @@ import java.util.Objects;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Trade {
 
-    private static final BigDecimal DEFAULT_FEE_RATE = new BigDecimal("0.0005");
+    // TODO: 이벤트/replay 기준 fee/dust 정책이 확정되면 실제 수수료율로 전환한다.
+    private static final BigDecimal DEFAULT_FEE_RATE = BigDecimal.ZERO;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
