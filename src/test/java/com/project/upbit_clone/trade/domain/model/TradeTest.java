@@ -64,7 +64,7 @@ class TradeTest {
     }
 
     @Test
-    @DisplayName("Happy : fee 관련 입력이 null이면 기본값으로 생성된다.")
+    @DisplayName("Happy : fee 관련 입력이 null이면 MVP 기본값(0)으로 생성된다.")
     void create_trade_with_null_fee_inputs() {
         // given
         Trade.CreateCommand command = createCommand(
@@ -78,7 +78,7 @@ class TradeTest {
 
         // then
         assertThat(trade).isNotNull();
-        assertThat(trade.getFeeRate()).isEqualTo(new BigDecimal("0.0005"));
+        assertThat(trade.getFeeRate()).isEqualTo(BigDecimal.ZERO);
         assertThat(trade.getBuyFeeAmount()).isEqualTo(BigDecimal.ZERO);
         assertThat(trade.getSellFeeAmount()).isEqualTo(BigDecimal.ZERO);
     }

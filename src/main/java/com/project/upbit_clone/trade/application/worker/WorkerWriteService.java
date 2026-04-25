@@ -466,7 +466,7 @@ public class WorkerWriteService {
                 fill.price(),
                 fill.executedQuantity(),
                 fill.executedQuoteAmount(),
-                // TODO: fee rate 설정 필요
+                // TODO: 이벤트/replay 기준 fee+dust 정산 정책이 확정되면 실제 수수료를 반영한다.
                 BigDecimal.ZERO,
                 BigDecimal.ZERO,
                 BigDecimal.ZERO
