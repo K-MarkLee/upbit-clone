@@ -5,6 +5,7 @@ import com.project.upbit_clone.global.exception.ErrorCode;
 import com.project.upbit_clone.trade.infrastructure.persistence.vo.CommandType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
@@ -16,11 +17,14 @@ import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
 
 @Entity
 @Getter
+@EntityListeners(AuditingEntityListener.class)
 @Table(
         name = "command_log",
         uniqueConstraints = {
@@ -59,13 +63,15 @@ public class CommandLog {
     @Column(name = "client_order_id", length = 150)
     private String clientOrderId;
 
+    // TODO : 이벤트 전환 후 json자체로 저장하면서 읽기
     @Column(name = "payload", nullable = false, columnDefinition = "json")
     private String payload;
 
     @Column(name = "request_hash", length = 64, nullable = false)
     private String requestHash;
 
-    @Column(name = "created_at", insertable = false, updatable = false, nullable = false)
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     public static CommandLog create(CreateCommand command) {

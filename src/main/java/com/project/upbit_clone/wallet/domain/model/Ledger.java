@@ -13,6 +13,8 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -21,6 +23,7 @@ import java.util.Objects;
 
 @Entity
 @Getter
+@EntityListeners(AuditingEntityListener.class)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(
         name = "ledger",
@@ -79,7 +82,8 @@ public class Ledger {
     @Column(name = "idempotency_key", nullable = false, length = 150)
     private String idempotencyKey;
 
-    @Column(name="created_at", insertable=false, updatable=false, nullable=false)
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     public static Ledger create(CreateCommand command) {

@@ -105,6 +105,35 @@ class EventProjectorTest {
     }
 
     @Test
+    @DisplayName("Happy : JSON 컬럼에서 꺼낸 quoted ORDER_BOOK_DELTA payload도 projection row로 upsert 한다.")
+    void project_quoted_order_book_delta_upserts_projection() {
+        // given
+        EventLog eventLog = eventLog(
+                16L,
+                EventType.ORDER_BOOK_DELTA,
+                "\"{\\\"reason\\\":\\\"RESTING_ORDER_ADDED\\\",\\\"side\\\":\\\"BID\\\",\\\"price\\\":\\\"1000\\\",\\\"beforeTotalQty\\\":\\\"0\\\",\\\"beforeOrderCount\\\":0,\\\"afterTotalQty\\\":\\\"2.5\\\",\\\"afterOrderCount\\\":3}\""
+        );
+        OrderBookProjectionId projectionId = new OrderBookProjectionId(100L, OrderSide.BID, new BigDecimal("1000"));
+
+        when(consumerOffsetRepository.findById(offsetId())).thenReturn(Optional.empty());
+        when(eventLogRepository.findTop100ByMarketIdAndIdGreaterThanOrderByIdAsc(100L, 0L))
+                .thenReturn(List.of(eventLog));
+        when(orderBookProjectionRepository.findById(projectionId)).thenReturn(Optional.empty());
+
+        // when
+        eventProjector.projectAvailableEvents(100L);
+
+        // then
+        verify(orderBookProjectionRepository).save(projectionCaptor.capture());
+        assertThat(projectionCaptor.getValue().getId()).isEqualTo(projectionId);
+        assertThat(projectionCaptor.getValue().getTotalQty()).isEqualByComparingTo("2.5");
+        assertThat(projectionCaptor.getValue().getOrderCount()).isEqualTo(3);
+
+        verify(consumerOffsetRepository).save(offsetCaptor.capture());
+        assertThat(offsetCaptor.getValue().getLastOffset()).isEqualTo(16L);
+    }
+
+    @Test
     @DisplayName("Happy : afterOrderCount가 0이면 projection row를 삭제한다.")
     void project_order_book_delta_deletes_empty_projection_level() {
         // given
