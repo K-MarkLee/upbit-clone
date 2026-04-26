@@ -9,6 +9,8 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -16,6 +18,7 @@ import java.util.Objects;
 
 @Entity
 @Getter
+@EntityListeners(AuditingEntityListener.class)
 @Table(
         name = "trade",
         uniqueConstraints = {
@@ -70,7 +73,8 @@ public class Trade {
     @Column(name = "sell_fee_amount", precision = 30, scale = 8, nullable = false)
     private BigDecimal sellFeeAmount;
 
-    @Column(name = "executed_at", insertable = false, updatable = false, nullable = false)
+    @CreatedDate
+    @Column(name = "executed_at", nullable = false, updatable = false)
     private LocalDateTime executedAt;
 
     public static Trade create(CreateCommand command) {

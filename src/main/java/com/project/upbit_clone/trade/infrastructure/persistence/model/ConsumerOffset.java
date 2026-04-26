@@ -5,15 +5,19 @@ import com.project.upbit_clone.global.exception.ErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
 
 @Entity
 @Getter
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "consumer_offset")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ConsumerOffset {
@@ -24,7 +28,8 @@ public class ConsumerOffset {
     @Column(name = "last_offset", nullable = false)
     private Long lastOffset;
 
-    @Column(name = "updated_at", insertable = false, updatable = false, nullable = false)
+    @LastModifiedDate
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
     public static ConsumerOffset create(ConsumerOffsetId id, Long lastOffset) {

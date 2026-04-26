@@ -6,16 +6,20 @@ import com.project.upbit_clone.global.exception.ErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
 @Getter
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "order_book_projection")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class OrderBookProjection {
@@ -29,7 +33,8 @@ public class OrderBookProjection {
     @Column(name = "order_count", nullable = false)
     private Integer orderCount;
 
-    @Column(name = "updated_at", insertable = false, updatable = false, nullable = false)
+    @LastModifiedDate
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
     public static OrderBookProjection create(

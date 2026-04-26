@@ -5,6 +5,7 @@ import com.project.upbit_clone.global.exception.ErrorCode;
 import com.project.upbit_clone.trade.infrastructure.persistence.vo.EventType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
@@ -19,11 +20,14 @@ import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
 
 @Entity
 @Getter
+@EntityListeners(AuditingEntityListener.class)
 @Table(
         name = "event_log",
         uniqueConstraints = {
@@ -62,7 +66,8 @@ public class EventLog {
     @Column(name = "payload", nullable = false, columnDefinition = "json")
     private String payload;
 
-    @Column(name = "created_at", insertable = false, updatable = false, nullable = false)
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     public static EventLog create(CreateCommand command) {
