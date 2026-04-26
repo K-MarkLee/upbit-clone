@@ -57,7 +57,6 @@ public class OrderController extends BaseController {
     public ResponseEntity<ApiResponse<OrderResponse>> cancel(@Valid @RequestBody OrderRequest.Cancel request) {
         CommandAck ack = cancelOrder.handle(new CancelOrder.Command(
                 request.userId(),
-                request.marketId(),
                 request.clientOrderId()
         ));
         return ResponseEntity

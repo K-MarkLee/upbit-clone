@@ -32,7 +32,6 @@ public final class OrderRequest {
 
     public record Cancel(
             @NotNull @Positive Long userId,
-            @NotNull @Positive Long marketId,
             @NotBlank
             @Size(max = 150, message = "client order id는 150자 보다 클 수 없습니다.")
             String clientOrderId
