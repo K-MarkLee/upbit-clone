@@ -545,6 +545,9 @@ class ApiEndToEndTest {
     @DisplayName("Happy/Negative : 동일 주문 재시도는 idempotency hit를 반환하고 다른 payload면 conflict를 반환한다.")
     void place_same_order_again_returns_idempotency_hit_and_conflict_for_different_payload() throws Exception {
         JsonNode firstResponse = successData(placeLimitAsk("ask-idempotency-1"));
+
+        awaitOrderStatus(seller.getId(), "ask-idempotency-1", OrderStatus.OPEN);
+
         JsonNode secondResponse = successData(placeLimitAsk("ask-idempotency-1"));
 
         assertThat(secondResponse.path("commandType").asString()).isEqualTo("PLACE_ORDER");
