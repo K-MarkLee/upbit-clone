@@ -85,7 +85,14 @@ public class EventProjectionWriteService {
     private OrderBookDeltaPayload readOrderBookDeltaPayload(String payload) {
         try {
             return OrderBookDeltaPayload.from(jsonMapper.readValue(payload, RawOrderBookDeltaPayload.class));
-        } catch (JacksonException | IllegalArgumentException | IllegalStateException exception) {
+        } catch (JacksonException primaryException) {
+            try {
+                String unwrappedPayload = jsonMapper.readValue(payload, String.class);
+                return OrderBookDeltaPayload.from(jsonMapper.readValue(unwrappedPayload, RawOrderBookDeltaPayload.class));
+            } catch (JacksonException | IllegalArgumentException | IllegalStateException secondaryException) {
+                throw new BusinessException(ErrorCode.INVALID_EVENT_PAYLOAD, "ORDER_BOOK_DELTA payload가 유효하지 않습니다.");
+            }
+        } catch (IllegalArgumentException | IllegalStateException exception) {
             throw new BusinessException(ErrorCode.INVALID_EVENT_PAYLOAD, "ORDER_BOOK_DELTA payload가 유효하지 않습니다.");
         }
     }
