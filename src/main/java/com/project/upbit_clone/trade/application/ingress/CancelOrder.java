@@ -51,6 +51,10 @@ public class CancelOrder extends AbstractOrderIngress<CancelOrder.Command> {
             Long marketId,
             String clientOrderId
     ) implements OrderCommand {
+        public Command(Long userId, String clientOrderId) {
+            this(userId, null, clientOrderId);
+        }
+
         @Override
         public CommandType commandType() {
             return CommandType.CANCEL_ORDER;
@@ -58,8 +62,23 @@ public class CancelOrder extends AbstractOrderIngress<CancelOrder.Command> {
     }
 
     @Override
+    protected boolean requiresMarketId() {
+        return false;
+    }
+
+    @Override
     protected Command normalize(Command command) {
-        return command;
+        if (command.marketId() != null) {
+            return command;
+        }
+
+        // TODO : place order에는 order가 필요없어 target order조회를 3번 반복해야함. 추후 줄일수 있도록
+        Order targetOrder = findRequiredOrder(command);
+        return new Command(
+                command.userId(),
+                targetOrder.getMarket().getId(),
+                command.clientOrderId()
+        );
     }
 
     @Override
@@ -86,11 +105,7 @@ public class CancelOrder extends AbstractOrderIngress<CancelOrder.Command> {
 
     private Order findRequiredOrder(Command command) {
         return orderRepository
-                .findByUserIdAndClientOrderIdAndMarketId(
-                        command.userId(),
-                        command.clientOrderId(),
-                        command.marketId()
-                )
+                .findByUserIdAndClientOrderId(command.userId(), command.clientOrderId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
     }
 }

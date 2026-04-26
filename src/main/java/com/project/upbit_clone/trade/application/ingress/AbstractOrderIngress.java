@@ -111,13 +111,19 @@ abstract class AbstractOrderIngress<C extends OrderCommand> {
 
     protected abstract CommandMessage toCommandMessage(Long commandLogId, String commandId, C command, Market market);
 
+    protected boolean requiresMarketId() {
+        return true;
+    }
+
     // 최소 검증
     private void validateInput(OrderCommand command) {
         if (command == null
                 || command.userId() == null
-                || command.marketId() == null
                 || command.clientOrderId() == null
                 || command.clientOrderId().isBlank()) {
+            throw new BusinessException(ErrorCode.MISSING_ORDER_REQUIRED_VALUE);
+        }
+        if (requiresMarketId() && command.marketId() == null) {
             throw new BusinessException(ErrorCode.MISSING_ORDER_REQUIRED_VALUE);
         }
     }
