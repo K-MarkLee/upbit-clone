@@ -7,7 +7,8 @@ build/
 !**/src/test/**/build/
 *.DS_Store
 /.ai
-.env
+*.env
+*.env.*
 
 ### STS ###
 .apt_generated
