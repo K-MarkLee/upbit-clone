@@ -28,9 +28,10 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @EntityGraph(attributePaths = {"user", "market", "market.baseAsset", "market.quoteAsset"})
     List<Order> findAllByOrderKeyIn(Collection<String> orderKeys);
 
+    // TODO : 추후 cursor pagination추가
     @EntityGraph(attributePaths = {"user", "market", "market.baseAsset", "market.quoteAsset"})
-    List<Order> findAllByUserIdOrderByIdDesc(Long userId);
+    List<Order> findTop10ByUserIdOrderByIdDesc(Long userId);
 
     @EntityGraph(attributePaths = {"user", "market", "market.baseAsset", "market.quoteAsset"})
-    List<Order> findAllByUserIdAndMarketIdOrderByIdDesc(Long userId, Long marketId);
+    List<Order> findTop10ByUserIdAndMarketIdOrderByIdDesc(Long userId, Long marketId);
 }

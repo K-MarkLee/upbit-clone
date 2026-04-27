@@ -19,11 +19,11 @@ public class OrderQueryService {
     @Transactional(readOnly = true)
     public List<OrderQueryResponse> findOrders(Long userId, Long marketId) {
         if (marketId == null) {
-            return orderRepository.findAllByUserIdOrderByIdDesc(userId).stream()
+            return orderRepository.findTop10ByUserIdOrderByIdDesc(userId).stream()
                     .map(OrderQueryResponse::from)
                     .toList();
         }
-        return orderRepository.findAllByUserIdAndMarketIdOrderByIdDesc(userId, marketId).stream()
+        return orderRepository.findTop10ByUserIdAndMarketIdOrderByIdDesc(userId, marketId).stream()
                 .map(OrderQueryResponse::from)
                 .toList();
     }
