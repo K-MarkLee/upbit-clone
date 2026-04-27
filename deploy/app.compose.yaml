@@ -1,0 +1,8 @@
+services:
+  app:
+    image: upbit-clone:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
