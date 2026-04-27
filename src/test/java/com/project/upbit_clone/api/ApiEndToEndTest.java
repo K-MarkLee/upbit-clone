@@ -3,10 +3,7 @@ package com.project.upbit_clone.api;
 import com.project.upbit_clone.asset.domain.model.Asset;
 import com.project.upbit_clone.global.domain.vo.EnumStatus;
 import com.project.upbit_clone.trade.domain.model.Market;
-import com.project.upbit_clone.trade.domain.model.Order;
 import com.project.upbit_clone.trade.domain.repository.MarketRepository;
-import com.project.upbit_clone.trade.domain.repository.OrderRepository;
-import com.project.upbit_clone.trade.domain.repository.TradeRepository;
 import com.project.upbit_clone.trade.domain.vo.OrderSide;
 import com.project.upbit_clone.trade.domain.vo.OrderStatus;
 import com.project.upbit_clone.trade.domain.vo.OrderType;
@@ -47,7 +44,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 @SpringBootTest
 @AutoConfigureMockMvc
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 @DisplayName("API 엔드투엔드 테스트")
 class ApiEndToEndTest {
 
@@ -65,12 +62,6 @@ class ApiEndToEndTest {
 
     @Autowired
     private MarketRepository marketRepository;
-
-    @Autowired
-    private OrderRepository orderRepository;
-
-    @Autowired
-    private TradeRepository tradeRepository;
 
     @Autowired
     private WalletRepository walletRepository;
@@ -220,12 +211,8 @@ class ApiEndToEndTest {
         ).andExpect(status().isOk()).andReturn());
 
         assertThat(wallets.size()).isEqualTo(2);
-        assertThat(wallets.get(0).path("assetSymbol").asString()).isEqualTo("BTC");
-        assertThat(wallets.get(0).path("availableBalance").decimalValue()).isEqualByComparingTo("1.0");
-        assertThat(wallets.get(0).path("lockedBalance").decimalValue()).isEqualByComparingTo("0");
-        assertThat(wallets.get(1).path("assetSymbol").asString()).isEqualTo("KRW");
-        assertThat(wallets.get(1).path("availableBalance").decimalValue()).isEqualByComparingTo("0");
-        assertThat(wallets.get(1).path("lockedBalance").decimalValue()).isEqualByComparingTo("0");
+        assertWalletBalance(wallets, "BTC", "1.0", "0");
+        assertWalletBalance(wallets, "KRW", "0", "0");
     }
 
     @Test
@@ -269,9 +256,9 @@ class ApiEndToEndTest {
         ).andExpect(status().isOk()).andReturn());
 
         assertThat(wallets.size()).isEqualTo(2);
-        assertThat(wallets.get(0).path("walletId").asLong()).isEqualTo(sellerBtcWallet.getId());
-        assertThat(wallets.get(0).path("availableBalance").decimalValue()).isEqualByComparingTo("0.8");
-        assertThat(wallets.get(0).path("lockedBalance").decimalValue()).isEqualByComparingTo("0.2");
+        JsonNode btcWallet = walletByAsset(wallets, "BTC");
+        assertThat(btcWallet.path("walletId").asLong()).isEqualTo(sellerBtcWallet.getId());
+        assertWalletBalance(wallets, "BTC", "0.8", "0.2");
 
         JsonNode ledgers = successData(mockMvc.perform(
                 get("/api/v1/ledgers")
@@ -343,20 +330,16 @@ class ApiEndToEndTest {
                         .param("userId", seller.getId().toString())
         ).andExpect(status().isOk()).andReturn());
 
-        assertThat(sellerWallets.get(0).path("availableBalance").decimalValue()).isEqualByComparingTo("0.8");
-        assertThat(sellerWallets.get(0).path("lockedBalance").decimalValue()).isEqualByComparingTo("0");
-        assertThat(sellerWallets.get(1).path("availableBalance").decimalValue()).isEqualByComparingTo("20");
-        assertThat(sellerWallets.get(1).path("lockedBalance").decimalValue()).isEqualByComparingTo("0");
+        assertWalletBalance(sellerWallets, "BTC", "0.8", "0");
+        assertWalletBalance(sellerWallets, "KRW", "20", "0");
 
         JsonNode buyerWallets = successData(mockMvc.perform(
                 get("/api/v1/wallets")
                         .param("userId", buyer.getId().toString())
         ).andExpect(status().isOk()).andReturn());
 
-        assertThat(buyerWallets.get(0).path("availableBalance").decimalValue()).isEqualByComparingTo("0.2");
-        assertThat(buyerWallets.get(0).path("lockedBalance").decimalValue()).isEqualByComparingTo("0");
-        assertThat(buyerWallets.get(1).path("availableBalance").decimalValue()).isEqualByComparingTo("980");
-        assertThat(buyerWallets.get(1).path("lockedBalance").decimalValue()).isEqualByComparingTo("0");
+        assertWalletBalance(buyerWallets, "BTC", "0.2", "0");
+        assertWalletBalance(buyerWallets, "KRW", "980", "0");
     }
 
     @Test
@@ -390,8 +373,7 @@ class ApiEndToEndTest {
                         .param("userId", seller.getId().toString())
         ).andExpect(status().isOk()).andReturn());
 
-        assertThat(wallets.get(0).path("availableBalance").decimalValue()).isEqualByComparingTo("1.0");
-        assertThat(wallets.get(0).path("lockedBalance").decimalValue()).isEqualByComparingTo("0");
+        assertWalletBalance(wallets, "BTC", "1.0", "0");
 
         JsonNode ledgers = successData(mockMvc.perform(
                 get("/api/v1/ledgers")
@@ -484,10 +466,8 @@ class ApiEndToEndTest {
                         .param("userId", buyer.getId().toString())
         ).andExpect(status().isOk()).andReturn());
 
-        assertThat(buyerWallets.get(0).path("availableBalance").decimalValue()).isEqualByComparingTo("0.2");
-        assertThat(buyerWallets.get(0).path("lockedBalance").decimalValue()).isEqualByComparingTo("0");
-        assertThat(buyerWallets.get(1).path("availableBalance").decimalValue()).isEqualByComparingTo("980");
-        assertThat(buyerWallets.get(1).path("lockedBalance").decimalValue()).isEqualByComparingTo("0");
+        assertWalletBalance(buyerWallets, "BTC", "0.2", "0");
+        assertWalletBalance(buyerWallets, "KRW", "980", "0");
     }
 
     @Test
@@ -535,10 +515,8 @@ class ApiEndToEndTest {
                         .param("userId", seller.getId().toString())
         ).andExpect(status().isOk()).andReturn());
 
-        assertThat(sellerWallets.get(0).path("availableBalance").decimalValue()).isEqualByComparingTo("0.8");
-        assertThat(sellerWallets.get(0).path("lockedBalance").decimalValue()).isEqualByComparingTo("0");
-        assertThat(sellerWallets.get(1).path("availableBalance").decimalValue()).isEqualByComparingTo("20");
-        assertThat(sellerWallets.get(1).path("lockedBalance").decimalValue()).isEqualByComparingTo("0");
+        assertWalletBalance(sellerWallets, "BTC", "0.8", "0");
+        assertWalletBalance(sellerWallets, "KRW", "20", "0");
     }
 
     @Test
@@ -724,10 +702,22 @@ class ApiEndToEndTest {
         awaitCondition(
                 "order status = " + expectedStatus,
                 Duration.ofSeconds(5),
-                () -> orderRepository.findByUserIdAndClientOrderId(userId, clientOrderId)
-                        .map(Order::getStatus)
-                        .filter(expectedStatus::equals)
-                        .isPresent()
+                () -> {
+                    try {
+                        MvcResult result = mockMvc.perform(
+                                get("/api/v1/orders/detail")
+                                        .param("userId", userId.toString())
+                                        .param("clientOrderId", clientOrderId)
+                        ).andReturn();
+                        if (result.getResponse().getStatus() != 200) {
+                            return false;
+                        }
+                        JsonNode order = successData(result);
+                        return expectedStatus.name().equals(order.path("status").asString());
+                    } catch (Exception exception) {
+                        throw new IllegalStateException("주문 상태 조회 대기 중 실패", exception);
+                    }
+                }
         );
     }
 
@@ -735,8 +725,39 @@ class ApiEndToEndTest {
         awaitCondition(
                 "trade count = " + expectedCount,
                 Duration.ofSeconds(5),
-                () -> tradeRepository.findTop100ByMarketIdOrderByIdDesc(marketId).size() == expectedCount
+                () -> {
+                    try {
+                        JsonNode trades = successData(mockMvc.perform(
+                                get("/api/v1/trades")
+                                        .param("marketId", marketId.toString())
+                        ).andExpect(status().isOk()).andReturn());
+                        return trades.size() == expectedCount;
+                    } catch (Exception exception) {
+                        throw new IllegalStateException("체결 조회 대기 중 실패", exception);
+                    }
+                }
         );
+    }
+
+    private void assertWalletBalance(
+            JsonNode wallets,
+            String assetSymbol,
+            String expectedAvailableBalance,
+            String expectedLockedBalance
+    ) {
+        JsonNode wallet = walletByAsset(wallets, assetSymbol);
+        assertThat(wallet.path("assetSymbol").asString()).isEqualTo(assetSymbol);
+        assertThat(wallet.path("availableBalance").decimalValue()).isEqualByComparingTo(expectedAvailableBalance);
+        assertThat(wallet.path("lockedBalance").decimalValue()).isEqualByComparingTo(expectedLockedBalance);
+    }
+
+    private JsonNode walletByAsset(JsonNode wallets, String assetSymbol) {
+        for (JsonNode wallet : wallets) {
+            if (assetSymbol.equals(wallet.path("assetSymbol").asString())) {
+                return wallet;
+            }
+        }
+        return fail("지갑 응답에서 assetSymbol을 찾을 수 없습니다: " + assetSymbol);
     }
 
     private JsonNode awaitOrderBookLevelCounts(int expectedBidLevels, int expectedAskLevels) {

@@ -163,6 +163,33 @@ class EventProjectorTest {
     }
 
     @Test
+    @DisplayName("Happy : quoted ORDER_BOOK_DELTA payload도 afterOrderCount가 0이면 projection row를 삭제한다.")
+    void project_quoted_order_book_delta_deletes_empty_projection_level() {
+        // given
+        EventLog eventLog = eventLog(
+                17L,
+                EventType.ORDER_BOOK_DELTA,
+                "\"{\\\"reason\\\":\\\"ORDER_CANCELED\\\",\\\"side\\\":\\\"ASK\\\",\\\"price\\\":\\\"2000\\\",\\\"beforeTotalQty\\\":\\\"1\\\",\\\"beforeOrderCount\\\":1,\\\"afterTotalQty\\\":\\\"0\\\",\\\"afterOrderCount\\\":0}\""
+        );
+        OrderBookProjectionId projectionId = new OrderBookProjectionId(100L, OrderSide.ASK, new BigDecimal("2000"));
+        OrderBookProjection projection = OrderBookProjection.create(projectionId, BigDecimal.ONE, 1);
+
+        when(consumerOffsetRepository.findById(offsetId())).thenReturn(Optional.empty());
+        when(eventLogRepository.findTop100ByMarketIdAndIdGreaterThanOrderByIdAsc(100L, 0L))
+                .thenReturn(List.of(eventLog));
+        when(orderBookProjectionRepository.findById(projectionId)).thenReturn(Optional.of(projection));
+
+        // when
+        eventProjector.projectAvailableEvents(100L);
+
+        // then
+        verify(orderBookProjectionRepository).delete(projection);
+        verify(orderBookProjectionRepository, never()).save(any(OrderBookProjection.class));
+        verify(consumerOffsetRepository).save(offsetCaptor.capture());
+        assertThat(offsetCaptor.getValue().getLastOffset()).isEqualTo(17L);
+    }
+
+    @Test
     @DisplayName("Happy : 다른 이벤트는 no-op 처리하고 offset만 전진한다.")
     void project_non_order_book_delta_advances_offset_only() {
         // given
