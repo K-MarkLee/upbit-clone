@@ -18,6 +18,7 @@ public class OrderQueryService {
 
     @Transactional(readOnly = true)
     public List<OrderQueryResponse> findOrders(Long userId, Long marketId) {
+        // TODO : market 존재 여부 정책 필요. 현재 marketid 값이 이상해도 응답 반환됨. cache hit으로 해도 될듯.
         if (marketId == null) {
             return orderRepository.findTop10ByUserIdOrderByIdDesc(userId).stream()
                     .map(OrderQueryResponse::from)

@@ -20,7 +20,8 @@ public class SwaggerConfig {
                         .title("Upbit Clone API")
                         .version("v1")
                         .description("MVP 주문/체결/취소 API 문서"))
-                .addSecurityItem(new SecurityRequirement().addList(securitySchemeName))
+                // TODO : JWT 생기면 주석 해제
+//                .addSecurityItem(new SecurityRequirement().addList(securitySchemeName))
                 .components(new Components()
                         .addSecuritySchemes(securitySchemeName, new SecurityScheme()
                                 .name(securitySchemeName)
