@@ -44,6 +44,10 @@ dependencies {
 	// flyway
 	implementation 'org.springframework.boot:spring-boot-starter-flyway'
 	runtimeOnly 'org.flywaydb:flyway-mysql'
+
+	// monitor
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
 }
 
 jacoco {

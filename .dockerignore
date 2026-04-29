@@ -1,0 +1,12 @@
+.git
+.gradle
+.gradle-local
+build
+.idea
+.DS_Store
+
+.env
+*.env
+.env.*
+
+docs
