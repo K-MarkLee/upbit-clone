@@ -1,34 +1,33 @@
-## #️⃣ 연관된 이슈
+## #️⃣ Related Issue
 
-> 관련된 이슈 번호를 적어주세요.
+> Please enter the related issue number.
 
-## #️⃣ 작업 내용
+## #️⃣ Summary of Changes
 
-> 이번 PR에서 작업한 내용을 간략히 설명해주세요. 
+> Briefly describe the work done in this PR.
 
-## #️⃣ 테스트 결과
+## #️⃣ Test Results
 
-> 코드 변경에 대해 테스트를 수행한 결과를 요약해주세요.
+> Summarize the results of the tests you ran for these changes.
 
-## #️⃣ 변경 사항 체크리스트
+## #️⃣ Change Checklist
 
-- [ ] 코드에 영향이 있는 모든 부분에 대한 테스트를 작성하고 실행했나요?
-- [ ] 문서를 작성하거나 수정했나요? (필요한 경우)
-- [ ] 본 PR에서 발생할 수 있는 모든 의존성 문제가 해결되었나요?
+- [ ] Have you written and run tests for every part of the code affected by this change?
+- [ ] Have you written or updated the documentation? (if needed)
+- [ ] Have all dependency issues that may arise from this PR been resolved?
 
-## #️⃣ 스크린샷 (선택)
+## #️⃣ Screenshots (optional)
 
-> 관련된 스크린샷이 있다면 여기에 첨부해주세요.
+> Attach any relevant screenshots here.
 
-## #️⃣ 리뷰 요구사항 (선택)
+## #️⃣ Review Requests (optional)
 
-> 리뷰어가 특별히 봐주었으면 하는 부분이 있다면 작성해주세요.
-> 예시: 이 부분의 코드가 잘 작동하는지 테스트해 주실 수 있나요?
+> Note anything you would like the reviewer to pay particular attention to.
+> Example: Could you test whether this part of the code works correctly?
 
-## 📎 참고 자료 (선택)
+## 📎 References (optional)
 
-> 관련 문서, 스크린샷, 또는 예시 등이 있다면 여기에 첨부해주세요
+> Attach any related documents, screenshots, or examples here.
 
 ---
 
-@codex 한글로 응답해 주세요.
