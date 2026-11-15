@@ -7,8 +7,11 @@ build/
 !**/src/test/**/build/
 *.DS_Store
 /.ai
+.env
 *.env
+.env.*
 *.env.*
+.example
 
 ### STS ###
 .apt_generated
@@ -43,4 +46,5 @@ out/
 
 ### Docs ###
 /docs
+/deploy/runbook.local.md
 

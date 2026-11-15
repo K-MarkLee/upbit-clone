@@ -2,11 +2,13 @@ package com.project.upbit_clone.api;
 
 import com.project.upbit_clone.asset.domain.model.Asset;
 import com.project.upbit_clone.global.domain.vo.EnumStatus;
+import com.project.upbit_clone.trade.application.ingress.IdempotencyHitService;
 import com.project.upbit_clone.trade.domain.model.Market;
 import com.project.upbit_clone.trade.domain.repository.MarketRepository;
 import com.project.upbit_clone.trade.domain.vo.OrderSide;
 import com.project.upbit_clone.trade.domain.vo.OrderStatus;
 import com.project.upbit_clone.trade.domain.vo.OrderType;
+import com.project.upbit_clone.trade.infrastructure.persistence.vo.CommandType;
 import com.project.upbit_clone.trade.presentation.request.OrderRequest;
 import com.project.upbit_clone.user.domain.model.User;
 import com.project.upbit_clone.user.domain.repository.UserRepository;
@@ -25,6 +27,7 @@ import org.springframework.http.MediaType;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -34,9 +37,15 @@ import tools.jackson.databind.json.JsonMapper;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.doAnswer;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -71,6 +80,9 @@ class ApiEndToEndTest {
 
     @Autowired
     private TransactionTemplate transactionTemplate;
+
+    @MockitoSpyBean
+    private IdempotencyHitService idempotencyHitService;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -343,6 +355,58 @@ class ApiEndToEndTest {
     }
 
     @Test
+    @DisplayName("Negative : 체결 DB 저장이 실패하면 DB는 롤백되고 메모리 오더북의 매도 호가는 사라진 상태로 남는다.")
+    void match_db_write_failure_leaves_memory_and_database_out_of_sync() throws Exception {
+        String askId = "ask-before-write-failure";
+        String failedBidId = "bid-write-failure";
+        String probeBidId = "bid-after-write-failure";
+        User probeBuyer = userRepository.saveAndFlush(User.create(
+                "probe@test.com", "probe", EnumStatus.ACTIVE, "probe-password"
+        ));
+        walletRepository.saveAndFlush(Wallet.create(probeBuyer, krwAsset, new BigDecimal("10"), BigDecimal.ZERO));
+
+        successData(placeLimitAsk(askId));
+        awaitOrderBookLevelCounts(0, 1);
+
+        jdbcTemplate.execute("alter table trade add constraint reject_test_trade check (quote_amount <> 20)");
+        try {
+            successData(placeLimitBid(failedBidId));
+            // 매도 호가가 메모리에 남아 있으면 같은 가격의 후속 주문이 10원에 체결된다.
+            successData(placeOrder(new OrderRequest.Place(
+                    probeBuyer.getId(), market.getId(), probeBidId, OrderSide.BID, OrderType.LIMIT,
+                    null, ORDER_PRICE, new BigDecimal("0.1"), null
+            )));
+            awaitOrderStatus(probeBuyer.getId(), probeBidId, OrderStatus.OPEN);
+
+            JsonNode projectedOrderBook = awaitOrderBookLevelCounts(1, 1);
+            assertThat(projectedOrderBook.path("asks").get(0).path("totalQty").decimalValue())
+                    .isEqualByComparingTo(ORDER_QUANTITY);
+            assertThat(projectedOrderBook.path("bids").get(0).path("totalQty").decimalValue())
+                    .isEqualByComparingTo("0.1");
+
+            assertThat(jdbcTemplate.queryForObject(
+                    "select status from orders where client_order_id = ?", String.class, askId
+            )).isEqualTo("OPEN");
+            assertThat(jdbcTemplate.queryForObject(
+                    "select status from orders where client_order_id = ?", String.class, failedBidId
+            )).isEqualTo("PENDING");
+            assertThat(jdbcTemplate.queryForObject("select count(*) from trade", Long.class)).isZero();
+            assertThat(jdbcTemplate.queryForObject(
+                    "select count(*) from ledger where ledger_type = 'TRADE'", Long.class
+            )).isZero();
+
+            Wallet sellerWallet = walletRepository.findById(sellerBtcWallet.getId()).orElseThrow();
+            assertThat(sellerWallet.getAvailableBalance()).isEqualByComparingTo("0.8");
+            assertThat(sellerWallet.getLockedBalance()).isEqualByComparingTo("0.2");
+            Wallet buyerWallet = walletRepository.findById(buyerKrwWallet.getId()).orElseThrow();
+            assertThat(buyerWallet.getAvailableBalance()).isEqualByComparingTo("980");
+            assertThat(buyerWallet.getLockedBalance()).isEqualByComparingTo("20");
+        } finally {
+            jdbcTemplate.execute("alter table trade drop constraint reject_test_trade");
+        }
+    }
+
+    @Test
     @DisplayName("Happy : OPEN 주문을 취소하면 주문 상태, 잠금 해제, 원장 조회가 함께 반영된다.")
     void cancel_open_order_and_query_order_wallet_and_ledger() throws Exception {
         successData(placeLimitAsk("ask-cancel-1"));
@@ -551,6 +615,45 @@ class ApiEndToEndTest {
         ).andExpect(status().isConflict()).andReturn());
 
         assertThat(failure.path("code").asString()).isEqualTo("D13");
+    }
+
+    @Test
+    @DisplayName("Happy : 동일 주문이 동시에 접수되면 같은 ACK를 반환하고 잠금은 한 번만 반영한다.")
+    void place_same_order_concurrently_reserves_funds_once() throws Exception {
+        String clientOrderId = "ask-concurrent-idempotency";
+        CyclicBarrier initialLookups = new CyclicBarrier(2);
+        doAnswer(invocation -> {
+            Optional<?> hit = (Optional<?>) invocation.callRealMethod();
+            assertThat(hit).isEmpty();
+            // 두 최초 조회가 끝난 뒤에만 주문 저장으로 진행한다.
+            initialLookups.await(5, TimeUnit.SECONDS);
+            return hit;
+        }).when(idempotencyHitService).find(seller.getId(), clientOrderId, CommandType.PLACE_ORDER);
+
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            var firstRequest = executor.submit(() -> placeLimitAsk(clientOrderId));
+            var secondRequest = executor.submit(() -> placeLimitAsk(clientOrderId));
+            JsonNode first = successData(firstRequest.get(10, TimeUnit.SECONDS));
+            JsonNode second = successData(secondRequest.get(10, TimeUnit.SECONDS));
+
+            assertThat(first.path("commandId").asString()).isNotBlank().isEqualTo(second.path("commandId").asString());
+            assertThat(first.path("commandLogId").asLong()).isPositive().isEqualTo(second.path("commandLogId").asLong());
+            assertThat(List.of(first.path("idempotencyHit").asBoolean(), second.path("idempotencyHit").asBoolean()))
+                    .containsExactlyInAnyOrder(false, true);
+        }
+
+        awaitOrderStatus(seller.getId(), clientOrderId, OrderStatus.OPEN);
+        awaitOrderBookLevelCounts(0, 1);
+
+        assertThat(jdbcTemplate.queryForObject("select count(*) from command_log", Long.class)).isEqualTo(1L);
+        assertThat(jdbcTemplate.queryForObject("select count(*) from orders", Long.class)).isEqualTo(1L);
+        assertThat(jdbcTemplate.queryForObject("select count(*) from ledger where ledger_type = 'ORDER_LOCK'", Long.class))
+                .isEqualTo(1L);
+
+        JsonNode wallets = successData(mockMvc.perform(
+                get("/api/v1/wallets").param("userId", seller.getId().toString())
+        ).andExpect(status().isOk()).andReturn());
+        assertWalletBalance(wallets, "BTC", "0.8", "0.2");
     }
 
     @Test
