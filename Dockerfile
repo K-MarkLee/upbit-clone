@@ -19,4 +19,4 @@ COPY --from=build /workspace/build/libs/*.jar /app/app.jar
 
 USER appuser
 
-ENTRYPOINT ["sh", "-c", "java ${JAVA_OPTS:-} -jar /app/app.jar"]
+ENTRYPOINT ["sh", "-c", "exec java ${JAVA_OPTS:-} -jar /app/app.jar"]
