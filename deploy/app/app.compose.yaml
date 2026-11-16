@@ -1,0 +1,21 @@
+services:
+  was:
+    image: upbit-clone:prod
+    container_name: upbit-clone
+    restart: unless-stopped
+    env_file:
+      - <.env location>
+    ports:
+      - "8080:8080"
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    pid: host
+    command:
+      - --path.rootfs=/host
+    volumes:
+      - /:/host:ro,rslave
+    ports:
+      - "9100:9100"

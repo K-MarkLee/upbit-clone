@@ -1,0 +1,12 @@
+services:
+  was:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: upbit-clone:prod
+    container_name: upbit-clone
+    restart: unless-stopped
+    env_file:
+      - /etc/upbit-clone/.env
+    ports:
+      - "${APP_HOST_PORT:-8080}:8080"

@@ -12,6 +12,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 import java.math.BigDecimal;
@@ -21,7 +22,6 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 
 @DisplayName("MarketWorker 단위 테스트")
@@ -421,7 +421,7 @@ class MarketWorkerTest {
 
     @Test
     @DisplayName("Happy : worker가 cancel 메시지를 consume하면 targetOrderKey 주문을 오더북에서 제거한다.")
-    void worker_removes_resting_order_when_cancel_message_is_consumed() throws InterruptedException {
+    void worker_removes_resting_order_when_cancel_message_is_consumed() {
         // given
         CommandMessage.Place placeMessage = validLimitPlaceMessage();
         CommandMessage.Cancel cancelMessage = new CommandMessage.Cancel(
@@ -436,13 +436,21 @@ class MarketWorkerTest {
         // when
         marketWorker.start();
         marketWorker.enqueue(placeMessage);
-        awaitOrderPresence(placeMessage.orderKey());
         marketWorker.enqueue(cancelMessage);
 
         // then
-        awaitOrderAbsence(placeMessage.orderKey());
+        ArgumentCaptor<InMemoryOrderBook.LevelDelta> deltaCaptor =
+                ArgumentCaptor.forClass(InMemoryOrderBook.LevelDelta.class);
         Mockito.verify(workerWriteService, Mockito.timeout(1_000))
-                .writeCancel(eq(cancelMessage), any(InMemoryOrderBook.LevelDelta.class));
+                .writeCancel(eq(cancelMessage), deltaCaptor.capture());
+        InMemoryOrderBook.LevelDelta delta = deltaCaptor.getValue();
+        assertThat(delta).isNotNull();
+        assertThat(delta.side()).isEqualTo(placeMessage.orderSide());
+        assertThat(delta.price()).isEqualByComparingTo(placeMessage.price());
+        assertThat(delta.before().orderCount()).isEqualTo(1);
+        assertThat(delta.before().totalQty()).isEqualByComparingTo(placeMessage.quantity());
+        assertThat(delta.after().orderCount()).isZero();
+        assertThat(delta.after().totalQty()).isZero();
     }
 
     private CommandMessage.Place validLimitPlaceMessage() {
@@ -471,7 +479,7 @@ class MarketWorkerTest {
         @Override
         public EngineResult.PlaceResult place(
                 CommandMessage.Place message,
-                com.project.upbit_clone.trade.application.engine.orderbook.InMemoryOrderBook orderBook
+                InMemoryOrderBook orderBook
         ) {
             this.lastMessage = message;
             invocationLatch.countDown();
@@ -487,38 +495,6 @@ class MarketWorkerTest {
 
         boolean awaitInvocation() throws InterruptedException {
             return invocationLatch.await(1, TimeUnit.SECONDS);
-        }
-    }
-
-    private void awaitOrderPresence(String orderKey) throws InterruptedException {
-        long deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
-        while (System.nanoTime() < deadlineNanos) {
-            if (currentOrderBook().findOrder(orderKey).isPresent()) {
-                return;
-            }
-            Thread.sleep(10);
-        }
-        assertThat(currentOrderBook().findOrder(orderKey)).isPresent();
-    }
-
-    private void awaitOrderAbsence(String orderKey) throws InterruptedException {
-        long deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
-        while (System.nanoTime() < deadlineNanos) {
-            if (currentOrderBook().findOrder(orderKey).isEmpty()) {
-                return;
-            }
-            Thread.sleep(10);
-        }
-        assertThat(currentOrderBook().findOrder(orderKey)).isEmpty();
-    }
-
-    private InMemoryOrderBook currentOrderBook() {
-        try {
-            java.lang.reflect.Field field = MarketWorker.class.getDeclaredField("orderBook");
-            field.setAccessible(true);
-            return (InMemoryOrderBook) field.get(marketWorker);
-        } catch (NoSuchFieldException | IllegalAccessException e) {
-            throw new IllegalStateException("MarketWorker orderBook 필드 조회 실패", e);
         }
     }
 }
