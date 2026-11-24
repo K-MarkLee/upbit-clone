@@ -7,4 +7,45 @@ services:
       - 'MYSQL_PASSWORD=${DATASOURCE_PASSWORD}'
       - 'MYSQL_ROOT_PASSWORD=${DATASOURCE_ROOT_PASSWORD}'
     ports:
-      - "${DATASOURCE_PORT}:3306"
+      - "127.0.0.1:${DATASOURCE_PORT}:3306"
+
+  mysqld-exporter:
+    image: prom/mysqld-exporter:latest
+    environment:
+      MYSQLD_EXPORTER_PASSWORD: ${MYSQL_EXPORTER_PASSWORD}
+    command:
+      - --mysqld.address=mysql:3306
+      - --mysqld.username=${MYSQL_EXPORTER_USER}
+      - --no-collect.slave_status
+    depends_on:
+      - mysql
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./load-tests/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  influxdb:
+    image: influxdb:1.8
+    environment:
+      INFLUXDB_DB: k6
+    ports:
+      - "127.0.0.1:8086:8086"
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./load-tests/monitoring/grafana-datasources.yml:/etc/grafana/provisioning/datasources/upbit.yml:ro
+
+  Jaeger:
+    image: jaegertracing/all-in-one:latest
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "127.0.0.1:16686:16686"
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"

@@ -12,6 +12,31 @@ spring:
     locations:
       - classpath:db/migration
       - classpath:db/seed
+      - classpath:db/seed-loadtest
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  metrics:
+    tags:
+      application: upbit-clone
+  tracing:
+    sampling:
+      probability: 1.0
+  opentelemetry:
+    resource-attributes:
+      service.name: upbit-clone
+    tracing:
+      export:
+        otlp:
+          endpoint: http://localhost:4318/v1/traces
 
 springdoc:
   api-docs:
